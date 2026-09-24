@@ -1,11 +1,10 @@
 // ========================================
 // Resetando — Tela Inicial Única
-// Minimalist, premium entry screen
+// Minimalist, premium entry screen with animated video
 // ========================================
 
 import type { AppState } from './models';
 import { completeOnboarding, saveState } from './storage';
-import { renderLogoSvg } from './logo';
 
 interface OnboardingCallbacks {
   onComplete: (state: AppState) => void;
@@ -15,8 +14,17 @@ export function renderOnboarding(container: HTMLElement, state: AppState, callba
   container.innerHTML = `
     <div class="onboarding">
       <div class="onboarding-slide">
-        <div class="onboarding-icon">
-          <div class="hero-logo-wrap">${renderLogoSvg(72, 'hero-logo')}</div>
+        <div class="onboarding-video-wrap">
+          <video
+            id="onboarding-video"
+            class="onboarding-video"
+            src="./animacao_entrada.mp4"
+            autoplay
+            muted
+            loop
+            playsinline
+            preload="auto"
+          ></video>
         </div>
         <h1 class="onboarding-title onboarding-brand">
           <span class="gold">RESET</span>ANDO
@@ -31,6 +39,12 @@ export function renderOnboarding(container: HTMLElement, state: AppState, callba
       </div>
     </div>
   `;
+
+  const video = document.getElementById('onboarding-video') as HTMLVideoElement;
+  if (video) {
+    video.muted = true;
+    video.play().catch(() => {});
+  }
 
   document.getElementById('onboarding-start-btn')?.addEventListener('click', () => {
     const newState = completeOnboarding(state);

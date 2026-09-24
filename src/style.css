@@ -1526,6 +1526,29 @@ a {
   animation: floatIcon 3s ease-in-out infinite;
 }
 
+.onboarding-video-wrap {
+  width: 100%;
+  max-width: 260px;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--spacing-lg);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  position: relative;
+  background: #000000;
+  box-shadow: 0 0 50px rgba(212, 175, 55, 0.25);
+}
+
+.onboarding-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
 .onboarding-icon svg {
   stroke: var(--gold-primary);
 }
