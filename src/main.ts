@@ -8,6 +8,7 @@ import type { AppState, TabId } from './models';
 import { loadState, getToday, formatNavDate } from './storage';
 import { renderOnboarding } from './onboarding';
 import { renderToday } from './today';
+import { renderEvolution } from './evolution';
 import { renderHistory } from './history';
 import { renderHabits } from './habits';
 import { renderProfile } from './profile';
@@ -77,8 +78,9 @@ class App {
   private renderNavBar(): string {
     const tabs: { id: TabId; iconHtml: string; label: string }[] = [
       { id: 'hoje', iconHtml: icon('sun', 20), label: 'Hoje' },
-      { id: 'historico', iconHtml: icon('calendar', 20), label: 'Histórico' },
+      { id: 'evolucao', iconHtml: icon('triangle', 20), label: 'Evolução' },
       { id: 'habitos', iconHtml: icon('listChecks', 20), label: 'Hábitos' },
+      { id: 'historico', iconHtml: icon('calendar', 20), label: 'Histórico' },
       { id: 'perfil', iconHtml: icon('user', 20), label: 'Perfil' },
     ];
 
@@ -98,20 +100,24 @@ class App {
     `;
   }
 
+  public navigateToTab(tab: TabId): void {
+    if (tab && tab !== this.currentTab) {
+      this.currentTab = tab;
+      const nav = document.getElementById('bottom-nav');
+      if (nav) {
+        nav.outerHTML = this.renderNavBar();
+        this.bindNav();
+      }
+      this.renderCurrentTab();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
   private bindNav(): void {
     document.querySelectorAll('.nav-item[data-tab]').forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = btn.getAttribute('data-tab') as TabId;
-        if (tab && tab !== this.currentTab) {
-          this.currentTab = tab;
-          // Re-render nav to update icons + active state
-          const nav = document.getElementById('bottom-nav');
-          if (nav) {
-            nav.outerHTML = this.renderNavBar();
-            this.bindNav();
-          }
-          this.renderCurrentTab();
-        }
+        this.navigateToTab(tab);
       });
     });
   }
@@ -123,6 +129,13 @@ class App {
       case 'hoje':
         renderToday(content, this.state, {
           onStateChange: (s) => { this.state = s; },
+          onNavigateTab: (t) => { this.navigateToTab(t); },
+        });
+        break;
+      case 'evolucao':
+        renderEvolution(content, this.state, {
+          onStateChange: (s) => { this.state = s; },
+          onNavigateTab: (t) => { this.navigateToTab(t); },
         });
         break;
       case 'historico':

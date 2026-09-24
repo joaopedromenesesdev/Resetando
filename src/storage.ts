@@ -3,7 +3,8 @@
 // localStorage-based, ready for Supabase migration
 // ========================================
 
-import type { AppState, Habit, DailyHabit, PillarId, AlterEgo, Goal } from './models';
+import type { AppState, Habit, DailyHabit, PillarId, AlterEgo, Goal, PillarXp } from './models';
+import { showXpToast } from './progression';
 
 const PRIMARY_STORAGE_KEY = 'resetando_data';
 const LEGACY_STORAGE_KEY = '3pilares_data';
@@ -59,6 +60,8 @@ function getDefaultState(): AppState {
     goals: [],
     userName: '',
     createdAt: new Date().toISOString(),
+    totalXp: 0,
+    pillarXp: { mente: 0, corpo: 0, alma: 0 },
   };
 }
 
@@ -84,8 +87,49 @@ export function loadState(): AppState {
     if (!parsed.goals) parsed.goals = [];
     if (parsed.alterEgo === undefined) parsed.alterEgo = null;
 
-    // Remove legacy pre-defined habits if present in user storage
     let modified = false;
+
+    // Progression XP Migration & Validation
+    if (parsed.pillarXp === undefined || parsed.totalXp === undefined) {
+      const pillarXp: PillarXp = { mente: 0, corpo: 0, alma: 0 };
+      let totalXp = 0;
+
+      if (Array.isArray(parsed.dailyHabits)) {
+        parsed.dailyHabits.forEach(dh => {
+          if (dh.completed) {
+            dh.xpAwarded = true;
+            pillarXp[dh.pillarId] = (pillarXp[dh.pillarId] || 0) + 10;
+            totalXp += 10;
+          }
+        });
+      }
+
+      if (Array.isArray(parsed.goals)) {
+        parsed.goals.forEach(g => {
+          if (g.completed || g.progress >= 100) {
+            g.xpAwarded = true;
+            pillarXp[g.pillarId] = (pillarXp[g.pillarId] || 0) + 100;
+            totalXp += 100;
+          }
+        });
+      }
+
+      parsed.pillarXp = pillarXp;
+      parsed.totalXp = totalXp;
+      modified = true;
+    } else {
+      parsed.pillarXp = {
+        mente: Math.max(0, parsed.pillarXp.mente || 0),
+        corpo: Math.max(0, parsed.pillarXp.corpo || 0),
+        alma: Math.max(0, parsed.pillarXp.alma || 0),
+      };
+      parsed.totalXp = Math.max(
+        0,
+        parsed.totalXp || (parsed.pillarXp.mente + parsed.pillarXp.corpo + parsed.pillarXp.alma)
+      );
+    }
+
+    // Remove legacy pre-defined habits if present in user storage
     if (Array.isArray(parsed.habits)) {
       const filtered = parsed.habits.filter(
         h => !PRESET_DEFAULT_HABIT_NAMES.has(h.name.trim().toLowerCase())
@@ -259,18 +303,48 @@ export function getDailyHabitsForPillar(state: AppState, date: string, pillarId:
 }
 
 export function toggleDailyHabit(state: AppState, dailyHabitId: string): AppState {
+  let xpGained = 0;
+  let gainedPillar: PillarId | null = null;
+
+  const pillarXp: PillarXp = {
+    mente: state.pillarXp?.mente || 0,
+    corpo: state.pillarXp?.corpo || 0,
+    alma: state.pillarXp?.alma || 0,
+  };
+  let totalXp = state.totalXp || 0;
+
   const dailyHabits = state.dailyHabits.map(dh => {
     if (dh.id === dailyHabitId) {
+      const nextCompleted = !dh.completed;
+      const alreadyAwarded = !!dh.xpAwarded;
+
+      // Award XP only on the first completion of this daily habit instance
+      if (nextCompleted && !alreadyAwarded) {
+        xpGained = 10;
+        gainedPillar = dh.pillarId;
+        pillarXp[dh.pillarId] = (pillarXp[dh.pillarId] || 0) + 10;
+        totalXp += 10;
+      }
+
       return {
         ...dh,
-        completed: !dh.completed,
-        completedAt: !dh.completed ? new Date().toISOString() : null,
+        completed: nextCompleted,
+        completedAt: nextCompleted ? new Date().toISOString() : null,
+        // Once awarded, remains awarded (XP is never lost or duplicated on re-toggle)
+        xpAwarded: alreadyAwarded || nextCompleted,
       };
     }
     return dh;
   });
-  const newState = { ...state, dailyHabits };
+
+  const newState = { ...state, dailyHabits, pillarXp, totalXp };
   saveState(newState);
+
+  // Immediate visual feedback
+  if (xpGained > 0 && gainedPillar) {
+    showXpToast(xpGained, gainedPillar);
+  }
+
   return newState;
 }
 
@@ -381,6 +455,12 @@ export function saveAlterEgo(state: AppState, alterEgo: AlterEgo): AppState {
   return newState;
 }
 
+export function removeAlterEgo(state: AppState): AppState {
+  const newState = { ...state, alterEgo: null };
+  saveState(newState);
+  return newState;
+}
+
 // ---- Goals CRUD ----
 export function createGoal(
   state: AppState,
@@ -389,17 +469,33 @@ export function createGoal(
   progress: number
 ): AppState {
   const clampedProgress = Math.max(0, Math.min(100, Math.round(progress)));
+  const isCompleted = clampedProgress >= 100;
   const newGoal: Goal = {
     id: generateId(),
     pillarId,
     title: title.trim(),
     progress: clampedProgress,
-    completed: clampedProgress >= 100,
+    completed: isCompleted,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    xpAwarded: isCompleted,
   };
+
+  const pillarXp: PillarXp = {
+    mente: state.pillarXp?.mente || 0,
+    corpo: state.pillarXp?.corpo || 0,
+    alma: state.pillarXp?.alma || 0,
+  };
+  let totalXp = state.totalXp || 0;
+
+  if (isCompleted) {
+    pillarXp[pillarId] += 100;
+    totalXp += 100;
+    showXpToast(100, pillarId);
+  }
+
   const goals = state.goals || [];
-  const newState = { ...state, goals: [...goals, newGoal] };
+  const newState = { ...state, goals: [...goals, newGoal], pillarXp, totalXp };
   saveState(newState);
   return newState;
 }
@@ -411,17 +507,38 @@ export function updateGoalProgress(
 ): AppState {
   const clampedProgress = Math.max(0, Math.min(100, Math.round(progress)));
   const goals = state.goals || [];
+  const targetGoal = goals.find(g => g.id === goalId);
+  if (!targetGoal) return state;
+
+  const pillarXp: PillarXp = {
+    mente: state.pillarXp?.mente || 0,
+    corpo: state.pillarXp?.corpo || 0,
+    alma: state.pillarXp?.alma || 0,
+  };
+  let totalXp = state.totalXp || 0;
+
+  const isCompleted = clampedProgress >= 100;
+  const shouldAwardXp = isCompleted && !targetGoal.xpAwarded;
+
+  if (shouldAwardXp) {
+    pillarXp[targetGoal.pillarId] += 100;
+    totalXp += 100;
+    showXpToast(100, targetGoal.pillarId);
+  }
+
   const updatedGoals = goals.map(g =>
     g.id === goalId
       ? {
           ...g,
           progress: clampedProgress,
-          completed: clampedProgress >= 100,
+          completed: isCompleted,
+          xpAwarded: g.xpAwarded || shouldAwardXp,
           updatedAt: new Date().toISOString(),
         }
       : g
   );
-  const newState = { ...state, goals: updatedGoals };
+
+  const newState = { ...state, goals: updatedGoals, pillarXp, totalXp };
   saveState(newState);
   return newState;
 }
@@ -432,21 +549,44 @@ export function updateGoal(
   updates: { title?: string; pillarId?: PillarId; progress?: number }
 ): AppState {
   const goals = state.goals || [];
+  const targetGoal = goals.find(g => g.id === goalId);
+  if (!targetGoal) return state;
+
+  const newProgress = updates.progress !== undefined
+    ? Math.max(0, Math.min(100, Math.round(updates.progress)))
+    : targetGoal.progress;
+  const newPillarId = updates.pillarId || targetGoal.pillarId;
+
+  const pillarXp: PillarXp = {
+    mente: state.pillarXp?.mente || 0,
+    corpo: state.pillarXp?.corpo || 0,
+    alma: state.pillarXp?.alma || 0,
+  };
+  let totalXp = state.totalXp || 0;
+
+  const isCompleted = newProgress >= 100;
+  const shouldAwardXp = isCompleted && !targetGoal.xpAwarded;
+
+  if (shouldAwardXp) {
+    pillarXp[newPillarId] += 100;
+    totalXp += 100;
+    showXpToast(100, newPillarId);
+  }
+
   const updatedGoals = goals.map(g => {
     if (g.id !== goalId) return g;
-    const newProgress = updates.progress !== undefined
-      ? Math.max(0, Math.min(100, Math.round(updates.progress)))
-      : g.progress;
     return {
       ...g,
       title: updates.title !== undefined ? updates.title.trim() : g.title,
-      pillarId: updates.pillarId || g.pillarId,
+      pillarId: newPillarId,
       progress: newProgress,
-      completed: newProgress >= 100,
+      completed: isCompleted,
+      xpAwarded: g.xpAwarded || shouldAwardXp,
       updatedAt: new Date().toISOString(),
     };
   });
-  const newState = { ...state, goals: updatedGoals };
+
+  const newState = { ...state, goals: updatedGoals, pillarXp, totalXp };
   saveState(newState);
   return newState;
 }
@@ -476,4 +616,18 @@ export function getPillarEvolution(state: AppState, pillarId: PillarId): {
   const avg = Math.round(sum / goals.length);
   return { progress: avg, goalCount: goals.length, hasGoals: true };
 }
+
+export function getPillarXp(state: AppState, pillarId: PillarId): number {
+  return state.pillarXp?.[pillarId] || 0;
+}
+
+export function getTotalXp(state: AppState): number {
+  if (state.totalXp !== undefined) return state.totalXp;
+  return (
+    (state.pillarXp?.mente || 0) +
+    (state.pillarXp?.corpo || 0) +
+    (state.pillarXp?.alma || 0)
+  );
+}
+
 

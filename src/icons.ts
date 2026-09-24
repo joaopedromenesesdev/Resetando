@@ -59,7 +59,12 @@ export const icons = {
   arrowUp: `<svg ${ICON_DEFAULTS}><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>`,
 
   rotateCcw: `<svg ${ICON_DEFAULTS}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`,
+
+  triangle: `<svg ${ICON_DEFAULTS}><path d="M13.73 4a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/></svg>`,
+
+  trendingUp: `<svg ${ICON_DEFAULTS}><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>`,
 };
+
 
 // Helper to render icon with custom size
 export function icon(name: keyof typeof icons, size: number = 20): string {

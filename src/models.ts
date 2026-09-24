@@ -27,6 +27,12 @@ export interface Habit {
   retiredAt: string | null;
 }
 
+export interface PillarXp {
+  mente: number;
+  corpo: number;
+  alma: number;
+}
+
 export interface DailyHabit {
   id: string;
   habitId: string;
@@ -36,6 +42,7 @@ export interface DailyHabit {
   completed: boolean;
   completedAt: string | null;
   order: number;
+  xpAwarded?: boolean;
 }
 
 export interface AlterEgoPillar {
@@ -60,6 +67,7 @@ export interface Goal {
   completed: boolean;
   createdAt: string;
   updatedAt: string;
+  xpAwarded?: boolean;
 }
 
 export interface AppState {
@@ -70,6 +78,10 @@ export interface AppState {
   goals: Goal[];
   userName: string;
   createdAt: string;
+  // Progression System
+  totalXp: number;
+  pillarXp: PillarXp;
 }
 
-export type TabId = 'hoje' | 'historico' | 'habitos' | 'perfil';
+export type TabId = 'hoje' | 'evolucao' | 'historico' | 'habitos' | 'perfil';
+

@@ -1,6 +1,6 @@
 // ========================================
 // Resetando — Today Screen
-// Main screen: progress, pillars, habits
+// Main screen: progression summary, daily habits, pillars
 // ========================================
 
 import type { AppState, PillarId } from './models';
@@ -15,14 +15,15 @@ import {
   createHabit,
   getStreak,
 } from './storage';
-import { icon, pillarIcon } from './icons';
 import {
-  renderEvolutionTriangleHtml,
-  bindEvolutionTriangleEvents,
-} from './triangle';
+  getGlobalLevelInfo,
+  getPillarLevelInfo,
+} from './progression';
+import { icon, pillarIcon } from './icons';
 
 interface TodayCallbacks {
   onStateChange: (state: AppState) => void;
+  onNavigateTab?: (tab: 'evolucao' | 'hoje' | 'habitos' | 'historico' | 'perfil') => void;
 }
 
 export function renderToday(container: HTMLElement, state: AppState, callbacks: TodayCallbacks): void {
@@ -34,6 +35,17 @@ export function renderToday(container: HTMLElement, state: AppState, callbacks: 
 
   const progress = getDayProgress(state, today);
   const streak = getStreak(state);
+
+  const totalXp = state.totalXp || 0;
+  const globalLevel = getGlobalLevelInfo(totalXp);
+
+  const menteXp = state.pillarXp?.mente || 0;
+  const corpoXp = state.pillarXp?.corpo || 0;
+  const almaXp = state.pillarXp?.alma || 0;
+
+  const menteLevel = getPillarLevelInfo(menteXp);
+  const corpoLevel = getPillarLevelInfo(corpoXp);
+  const almaLevel = getPillarLevelInfo(almaXp);
 
   container.innerHTML = `
     <div class="page">
@@ -49,18 +61,70 @@ export function renderToday(container: HTMLElement, state: AppState, callbacks: 
         </div>
       ` : ''}
 
+      <!-- Progression Summary Card (Section 17) -->
+      <section class="today-progression-card" id="today-progression-card">
+        <div class="today-progression-top">
+          <div class="today-level-badge">
+            <span class="level-badge-label">PROGRESSÃO GLOBAL</span>
+            <span class="level-badge-value">NÍVEL ${globalLevel.level}</span>
+          </div>
+          <div class="today-xp-total">
+            <span class="xp-value">${totalXp.toLocaleString('pt-BR')}</span>
+            <span class="xp-unit">XP</span>
+          </div>
+        </div>
+
+        <div class="today-xp-bar-wrap">
+          <div class="today-xp-bar">
+            <div class="today-xp-fill" style="width: ${globalLevel.progressPercent}%"></div>
+          </div>
+          <div class="today-xp-sub-row">
+            <span class="today-xp-sub">${globalLevel.currentLevelXp} / ${globalLevel.xpForNextLevel} XP para Nível ${globalLevel.level + 1}</span>
+            <span class="today-xp-pct">${globalLevel.progressPercent}%</span>
+          </div>
+        </div>
+
+        <!-- Pillars Summary Pills -->
+        <div class="today-pillars-pills">
+          <div class="today-pillar-pill" data-nav-pillar="mente">
+            <span class="pill-name">Mente</span>
+            <span class="pill-stat">Nvl ${menteLevel.level} · ${menteXp} XP</span>
+          </div>
+          <div class="today-pillar-pill" data-nav-pillar="corpo">
+            <span class="pill-name">Corpo</span>
+            <span class="pill-stat">Nvl ${corpoLevel.level} · ${corpoXp} XP</span>
+          </div>
+          <div class="today-pillar-pill" data-nav-pillar="alma">
+            <span class="pill-name">Alma</span>
+            <span class="pill-stat">Nvl ${almaLevel.level} · ${almaXp} XP</span>
+          </div>
+        </div>
+
+        <!-- Navigation link to Minha Evolução -->
+        <button class="btn-today-evolution-link" id="btn-goto-evolution">
+          <div class="btn-evolution-link-left">
+            <span class="evolution-link-icon">${icon('triangle', 16)}</span>
+            <span class="evolution-link-text">Minha Evolução</span>
+          </div>
+          <div class="btn-evolution-link-right">
+            <span class="evolution-link-hint">Ver Triângulo</span>
+            <span class="evolution-link-arrow">${icon('chevronRight', 16)}</span>
+          </div>
+        </button>
+      </section>
+
+      <!-- Daily Habit Progress -->
       <div class="progress-container">
         <div class="progress-summary">
           <span class="progress-number">${progress.completed}</span>
-          <span class="progress-total">${progress.total > 0 ? `/ ${progress.total} hábitos concluídos` : 'hábitos cadastrados'}</span>
+          <span class="progress-total">${progress.total > 0 ? `/ ${progress.total} hábitos concluídos hoje` : 'hábitos cadastrados'}</span>
         </div>
         <div class="progress-bar">
           <div class="progress-fill" style="width: ${progress.percent}%"></div>
         </div>
       </div>
 
-      ${renderEvolutionTriangleHtml(state)}
-
+      <!-- Pillars and Daily Habits List -->
       <div id="pillars-container">
         ${PILLARS.map(pillar => {
           const pillarProgress = getPillarProgress(state, today, pillar.id);
@@ -90,6 +154,7 @@ export function renderToday(container: HTMLElement, state: AppState, callbacks: 
                       <span class="check-icon">${icon('check', 14)}</span>
                     </div>
                     <span class="habit-name">${dh.habitName}</span>
+                    <span class="habit-xp-pill">+10 XP</span>
                   </div>
                 `).join('')}
 
@@ -108,7 +173,7 @@ export function renderToday(container: HTMLElement, state: AppState, callbacks: 
         <div class="perfect-day">
           <div class="perfect-day-icon">${icon('sparkles', 40)}</div>
           <p class="perfect-day-title">Dia perfeito!</p>
-          <p class="perfect-day-sub">Todos os ${progress.total} hábitos concluídos.</p>
+          <p class="perfect-day-sub">Todos os ${progress.total} hábitos concluídos. Sua evolução agradece!</p>
         </div>
       ` : ''}
     </div>
@@ -116,18 +181,19 @@ export function renderToday(container: HTMLElement, state: AppState, callbacks: 
     <div id="today-modal-container"></div>
   `;
 
-  // Bind evolution triangle interactions (Alter Ego & Metas)
-  bindEvolutionTriangleEvents(container, state, {
-    onStateChange: (newState) => {
-      state = newState;
-      callbacks.onStateChange(newState);
-    },
-    onRerender: () => {
-      renderToday(container, state, callbacks);
-    },
+  // Go to Minha Evolução tab
+  container.querySelector('#btn-goto-evolution')?.addEventListener('click', () => {
+    callbacks.onNavigateTab?.('evolucao');
   });
 
-  // Bind habit toggle events
+  // Pillars pills navigation
+  container.querySelectorAll('[data-nav-pillar]').forEach(pill => {
+    pill.addEventListener('click', () => {
+      callbacks.onNavigateTab?.('evolucao');
+    });
+  });
+
+  // Bind habit toggle events (instant +10 XP with toast & storage update)
   container.querySelectorAll('.habit-item[data-daily-habit-id]').forEach(item => {
     item.addEventListener('click', () => {
       const id = item.getAttribute('data-daily-habit-id');
@@ -166,7 +232,7 @@ function showTodayAddModal(
         <div class="modal-handle"></div>
         <h2 class="modal-title">${pillarIcon(pillarId, 20)} Novo Hábito · ${pillarTitle}</h2>
         <p class="modal-subtitle" style="margin-top: 4px; margin-bottom: var(--spacing-md); color: var(--text-tertiary); font-size: var(--font-size-xs);">
-          Defina uma ação diária simples e consistente para evoluir este pilar.
+          Cada conclusão diária gera +10 XP para o pilar ${pillarTitle}.
         </p>
         <input
           type="text"

@@ -7,6 +7,7 @@ import type { AppState, PillarId, AlterEgo, Goal } from './models';
 import { PILLARS } from './models';
 import {
   saveAlterEgo,
+  removeAlterEgo,
   createGoal,
   updateGoal,
   deleteGoal,
@@ -17,6 +18,7 @@ export function openAlterEgoModal(
   state: AppState,
   onSave: (newState: AppState) => void
 ): void {
+  const hasExisting = !!state.alterEgo;
   const existing = state.alterEgo || {
     name: 'Minha melhor versão',
     mente: { target: 90, traits: ['disciplinado', 'focado', 'intelectualmente desenvolvido'] },
@@ -31,14 +33,14 @@ export function openAlterEgoModal(
       <div class="modal-card">
         <div class="modal-header">
           <div>
-            <span class="modal-badge">Direção & Destino</span>
-            <h2 class="modal-title">Configurar Alter Ego</h2>
+            <span class="modal-badge">Referência Opcional</span>
+            <h2 class="modal-title">${hasExisting ? 'Editar Alter Ego' : 'Definir Alter Ego'}</h2>
           </div>
           <button class="modal-close" id="alter-ego-close-btn" aria-label="Fechar">&times;</button>
         </div>
 
         <p class="modal-description">
-          O Alter Ego representa quem você deseja se tornar. Defina os alvos de evolução (0 a 100) para cada pilar.
+          O Alter Ego é uma referência opcional de longo prazo para visualizar onde você quer chegar em comparação com sua evolução real.
         </p>
 
         <form id="alter-ego-form" class="modal-form">
@@ -53,6 +55,7 @@ export function openAlterEgoModal(
               required
             />
           </div>
+
 
           <!-- MENTE -->
           <div class="alter-ego-pillar-block">
@@ -127,6 +130,11 @@ export function openAlterEgoModal(
           </div>
 
           <div class="modal-actions">
+            ${hasExisting ? `
+              <button type="button" class="btn btn-danger-subtle" id="alter-ego-remove-btn">
+                ${icon('trash', 14)} Remover Alter Ego
+              </button>
+            ` : ''}
             <button type="button" class="btn btn-secondary" id="alter-ego-cancel-btn">Cancelar</button>
             <button type="submit" class="btn btn-primary" id="alter-ego-save-btn">Salvar Alter Ego</button>
           </div>
@@ -148,6 +156,13 @@ export function openAlterEgoModal(
 
   document.getElementById('alter-ego-close-btn')?.addEventListener('click', close);
   document.getElementById('alter-ego-cancel-btn')?.addEventListener('click', close);
+  document.getElementById('alter-ego-remove-btn')?.addEventListener('click', () => {
+    if (confirm('Deseja remover o Alter Ego? Seus níveis, XP e histórico continuarão totalmente preservados.')) {
+      close();
+      const newState = removeAlterEgo(state);
+      onSave(newState);
+    }
+  });
   backdrop.addEventListener('click', (e) => {
     if (e.target === backdrop) close();
   });

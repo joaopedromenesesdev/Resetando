@@ -1,15 +1,20 @@
 // ========================================
 // Resetando — Triângulo de Evolução
-// Visual map of long-term personal transformation:
-// Alter Ego (Destination / "Quem eu quero ser") vs. Metas (Evolution / "Onde eu estou")
+// Visual map of accumulated evolution:
+// XP-Driven Triangle: Mente, Corpo, Alma (Accumulated XP)
+// Alter Ego: Completely Optional Reference Layer ("Onde quero chegar")
 // ========================================
 
 import type { AppState, PillarId } from './models';
 import {
   getPillarGoals,
-  getPillarEvolution,
   updateGoalProgress,
 } from './storage';
+import {
+  getPillarLevelInfo,
+  getEvolutionScale,
+  getPillarProgressPercent,
+} from './progression';
 import { openAlterEgoModal, openGoalModal } from './goals_modal';
 import { icon } from './icons';
 
@@ -49,14 +54,36 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
   const alterEgo = state.alterEgo;
   const hasAlterEgo = !!alterEgo;
 
-  const menteEvol = getPillarEvolution(state, 'mente');
-  const corpoEvol = getPillarEvolution(state, 'corpo');
-  const almaEvol = getPillarEvolution(state, 'alma');
+  const menteXp = state.pillarXp?.mente || 0;
+  const corpoXp = state.pillarXp?.corpo || 0;
+  const almaXp = state.pillarXp?.alma || 0;
 
-  const totalGoals = (state.goals || []).length;
-  const hasGoals = totalGoals > 0;
+  const menteLevel = getPillarLevelInfo(menteXp);
+  const corpoLevel = getPillarLevelInfo(corpoXp);
+  const almaLevel = getPillarLevelInfo(almaXp);
 
-  // Alter Ego Points (Destination)
+  // Dynamic Scale without permanent artificial limits
+  const maxPillarXp = Math.max(menteXp, corpoXp, almaXp);
+  const scale = getEvolutionScale(maxPillarXp);
+  const scaleMax = scale.tierMax;
+
+  // Normalized progress percentage for each pillar (0% at center, 100% at outer vertex)
+  const pctM = getPillarProgressPercent(menteXp, scaleMax);
+  const pctC = getPillarProgressPercent(corpoXp, scaleMax);
+  const pctA = getPillarProgressPercent(almaXp, scaleMax);
+
+  const rem = pctM / 100;
+  const rec = pctC / 100;
+  const rea = pctA / 100;
+
+  // Internal Evolution Points (based strictly on XP)
+  const pem = { x: CX + (VM.x - CX) * rem, y: CY + (VM.y - CY) * rem };
+  const pec = { x: CX + (VC.x - CX) * rec, y: CY + (VC.y - CY) * rec };
+  const pea = { x: CX + (VA.x - CX) * rea, y: CY + (VA.y - CY) * rea };
+
+  const evolutionPointsStr = `${pem.x.toFixed(1)},${pem.y.toFixed(1)} ${pec.x.toFixed(1)},${pec.y.toFixed(1)} ${pea.x.toFixed(1)},${pea.y.toFixed(1)}`;
+
+  // Optional Alter Ego Reference Points
   const targetM = alterEgo ? alterEgo.mente.target : 0;
   const targetC = alterEgo ? alterEgo.corpo.target : 0;
   const targetA = alterEgo ? alterEgo.alma.target : 0;
@@ -71,46 +98,33 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
 
   const alterEgoPointsStr = `${ptm.x.toFixed(1)},${ptm.y.toFixed(1)} ${ptc.x.toFixed(1)},${ptc.y.toFixed(1)} ${pta.x.toFixed(1)},${pta.y.toFixed(1)}`;
 
-  // Evolution Points (Current based on Goals)
-  const rem = menteEvol.hasGoals ? menteEvol.progress / 100 : 0;
-  const rec = corpoEvol.hasGoals ? corpoEvol.progress / 100 : 0;
-  const rea = almaEvol.hasGoals ? almaEvol.progress / 100 : 0;
-
-  const pem = { x: CX + (VM.x - CX) * rem, y: CY + (VM.y - CY) * rem };
-  const pec = { x: CX + (VC.x - CX) * rec, y: CY + (VC.y - CY) * rec };
-  const pea = { x: CX + (VA.x - CX) * rea, y: CY + (VA.y - CY) * rea };
-
-  const evolutionPointsStr = `${pem.x.toFixed(1)},${pem.y.toFixed(1)} ${pec.x.toFixed(1)},${pec.y.toFixed(1)} ${pea.x.toFixed(1)},${pea.y.toFixed(1)}`;
-
+  // Guides
   const outerTriangleStr = getGuideTrianglePoints(1.0);
   const guide75 = getGuideTrianglePoints(0.75);
   const guide50 = getGuideTrianglePoints(0.5);
   const guide25 = getGuideTrianglePoints(0.25);
 
-  const selectedContext = selectedPillar ? getContextData(selectedPillar, state) : null;
+  const hasAnyProgress = menteXp > 0 || corpoXp > 0 || almaXp > 0;
+  const selectedContext = selectedPillar ? getContextData(selectedPillar, state, scaleMax) : null;
 
   return `
     <section class="evolution-triangle-card" id="evolution-triangle-card">
       <div class="triangle-header">
         <div class="triangle-header-left">
-          <span class="triangle-badge">Longo Prazo</span>
+          <span class="triangle-badge">Progresso Acumulado</span>
           <h2 class="triangle-title">TRIÂNGULO DE EVOLUÇÃO</h2>
         </div>
-        <button class="btn-config-alter-ego" id="btn-open-alter-ego" title="Configurar Alter Ego">
-          ${icon('target', 14)} <span>${hasAlterEgo ? alterEgo.name : 'Criar Alter Ego'}</span>
-        </button>
-      </div>
-
-      <!-- State 1: No Alter Ego -->
-      ${!hasAlterEgo ? `
-        <div class="triangle-empty-banner">
-          <p class="empty-banner-title">Defina seu Alter Ego para descobrir sua direção.</p>
-          <p class="empty-banner-desc">Quem você quer se tornar? Estabeleça seus alvos para Mente, Corpo e Alma.</p>
-          <button class="btn btn-primary btn-sm" id="btn-empty-alter-ego">
-            Definir Alter Ego
+        <div class="triangle-header-right">
+          <button class="btn-config-alter-ego ${hasAlterEgo ? 'active' : ''}" id="btn-open-alter-ego" title="Configurar Alter Ego (Opcional)">
+            ${icon('target', 14)}
+            <span>${hasAlterEgo ? alterEgo.name : 'Adicionar Alter Ego'}</span>
           </button>
         </div>
-      ` : ''}
+      </div>
+
+      <div class="triangle-scale-info">
+        <span class="scale-label">Escala Atual: <strong>${scale.tierName}</strong> (até ${scaleMax.toLocaleString('pt-BR')} XP por pilar)</span>
+      </div>
 
       <!-- SVG Graph Section -->
       <div class="triangle-svg-wrapper">
@@ -120,7 +134,7 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
           width="100%"
           height="auto"
           role="img"
-          aria-label="Triângulo de Evolução: Alter Ego vs Metas"
+          aria-label="Triângulo de Evolução baseado em XP"
         >
           <!-- Spokes -->
           <line x1="${CX}" y1="${CY}" x2="${VM.x.toFixed(1)}" y2="${VM.y.toFixed(1)}" class="triangle-spoke" />
@@ -132,9 +146,9 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
           <polygon points="${guide50}" class="triangle-guide guide-50" />
           <polygon points="${guide75}" class="triangle-guide guide-75" />
           <polygon points="${outerTriangleStr}" class="triangle-outer" />
-          <circle cx="${CX}" cy="${CY}" r="2" class="triangle-center-point" />
+          <circle cx="${CX}" cy="${CY}" r="2.5" class="triangle-center-point" />
 
-          <!-- Alter Ego Triangle (Destino / Linha Dourada Discreta) -->
+          <!-- Optional Alter Ego Reference Triangle (Destino / Linha Dourada Discreta) -->
           ${hasAlterEgo ? `
             <polygon
               id="alter-ego-polygon"
@@ -146,29 +160,32 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
             <circle cx="${pta.x.toFixed(1)}" cy="${pta.y.toFixed(1)}" r="3" class="triangle-target-dot" />
           ` : ''}
 
-          <!-- Evolution Triangle (Onde estou / Preenchimento Dourado Forte) -->
-          ${hasAlterEgo && hasGoals ? `
+          <!-- Evolution Triangle (Baseado estritamente em XP acumulada) -->
+          ${hasAnyProgress ? `
             <polygon
               id="evolution-progress-polygon"
               points="${evolutionPointsStr}"
               class="triangle-inner-area"
             />
-            ${menteEvol.hasGoals ? `<circle cx="${pem.x.toFixed(1)}" cy="${pem.y.toFixed(1)}" r="3.5" class="triangle-inner-dot" />` : ''}
-            ${corpoEvol.hasGoals ? `<circle cx="${pec.x.toFixed(1)}" cy="${pec.y.toFixed(1)}" r="3.5" class="triangle-inner-dot" />` : ''}
-            ${almaEvol.hasGoals ? `<circle cx="${pea.x.toFixed(1)}" cy="${pea.y.toFixed(1)}" r="3.5" class="triangle-inner-dot" />` : ''}
-          ` : ''}
+            <circle cx="${pem.x.toFixed(1)}" cy="${pem.y.toFixed(1)}" r="3.5" class="triangle-inner-dot vertex-mente-dot" />
+            <circle cx="${pec.x.toFixed(1)}" cy="${pec.y.toFixed(1)}" r="3.5" class="triangle-inner-dot vertex-corpo-dot" />
+            <circle cx="${pea.x.toFixed(1)}" cy="${pea.y.toFixed(1)}" r="3.5" class="triangle-inner-dot vertex-alma-dot" />
+          ` : `
+            <!-- At 0 XP, glowing center origin dot -->
+            <circle cx="${CX}" cy="${CY}" r="4" class="triangle-inner-dot origin-dot" />
+          `}
 
           <!-- Outer Anchor Dots -->
-          <circle cx="${VM.x.toFixed(1)}" cy="${VM.y.toFixed(1)}" r="3" class="triangle-outer-dot ${selectedPillar === 'mente' ? 'selected' : ''}" />
-          <circle cx="${VC.x.toFixed(1)}" cy="${VC.y.toFixed(1)}" r="3" class="triangle-outer-dot ${selectedPillar === 'corpo' ? 'selected' : ''}" />
-          <circle cx="${VA.x.toFixed(1)}" cy="${VA.y.toFixed(1)}" r="3" class="triangle-outer-dot ${selectedPillar === 'alma' ? 'selected' : ''}" />
+          <circle cx="${VM.x.toFixed(1)}" cy="${VM.y.toFixed(1)}" class="triangle-outer-dot ${selectedPillar === 'mente' ? 'selected' : ''}" />
+          <circle cx="${VC.x.toFixed(1)}" cy="${VC.y.toFixed(1)}" class="triangle-outer-dot ${selectedPillar === 'corpo' ? 'selected' : ''}" />
+          <circle cx="${VA.x.toFixed(1)}" cy="${VA.y.toFixed(1)}" class="triangle-outer-dot ${selectedPillar === 'alma' ? 'selected' : ''}" />
 
           <!-- MENTE Vertex Labels (Top) -->
           <g class="triangle-vertex-group ${selectedPillar === 'mente' ? 'selected' : ''}" data-pillar-vertex="mente" role="button" tabindex="0">
             <circle cx="${CX}" cy="18" r="34" class="triangle-touch-target" />
             <text x="${CX}" y="14" class="triangle-label-name" text-anchor="middle">MENTE</text>
             <text x="${CX}" y="27" class="triangle-label-stats" text-anchor="middle">
-              ${hasAlterEgo ? (menteEvol.hasGoals ? `Alvo: ${targetM}% · Atual: ${menteEvol.progress}%` : `Alvo: ${targetM}%`) : 'Definir'}
+              ${hasAlterEgo ? `Nvl ${menteLevel.level} (${pctM}%) · Alvo ${targetM}%` : `Nível ${menteLevel.level} · ${menteXp} XP`}
             </text>
           </g>
 
@@ -177,7 +194,7 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
             <circle cx="85" cy="272" r="34" class="triangle-touch-target" />
             <text x="85" y="270" class="triangle-label-name" text-anchor="middle">CORPO</text>
             <text x="85" y="284" class="triangle-label-stats" text-anchor="middle">
-              ${hasAlterEgo ? (corpoEvol.hasGoals ? `Alvo: ${targetC}% · Atual: ${corpoEvol.progress}%` : `Alvo: ${targetC}%`) : 'Definir'}
+              ${hasAlterEgo ? `Nvl ${corpoLevel.level} (${pctC}%) · Alvo ${targetC}%` : `Nível ${corpoLevel.level} · ${corpoXp} XP`}
             </text>
           </g>
 
@@ -186,36 +203,29 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
             <circle cx="315" cy="272" r="34" class="triangle-touch-target" />
             <text x="315" y="270" class="triangle-label-name" text-anchor="middle">ALMA</text>
             <text x="315" y="284" class="triangle-label-stats" text-anchor="middle">
-              ${hasAlterEgo ? (almaEvol.hasGoals ? `Alvo: ${targetA}% · Atual: ${almaEvol.progress}%` : `Alvo: ${targetA}%`) : 'Definir'}
+              ${hasAlterEgo ? `Nvl ${almaLevel.level} (${pctA}%) · Alvo ${targetA}%` : `Nível ${almaLevel.level} · ${almaXp} XP`}
             </text>
           </g>
         </svg>
       </div>
 
-      <!-- Legend -->
+      <!-- Legend or Caption -->
       ${hasAlterEgo ? `
         <div class="triangle-legend">
           <div class="legend-item">
             <span class="legend-line legend-alter-ego"></span>
-            <span class="legend-text">Destino (Alter Ego)</span>
+            <span class="legend-text">Destino (${alterEgo.name})</span>
           </div>
           <div class="legend-item">
             <span class="legend-box legend-evolution"></span>
-            <span class="legend-text">Evolução Atual (Metas)</span>
+            <span class="legend-text">Evolução Real (XP)</span>
           </div>
         </div>
-      ` : ''}
-
-      <!-- State 2: Has Alter Ego, but no goals -->
-      ${hasAlterEgo && !hasGoals ? `
-        <div class="triangle-empty-banner">
-          <p class="empty-banner-title">Crie metas para começar sua evolução.</p>
-          <p class="empty-banner-desc">O triângulo pontilhado acima representa onde você quer chegar. Suas metas movimentarão o triângulo da evolução.</p>
-          <button class="btn btn-primary btn-sm" id="btn-empty-create-goal">
-            + Adicionar Primeira Meta
-          </button>
-        </div>
-      ` : ''}
+      ` : `
+        <p class="triangle-caption-note">
+          Continue acumulando XP para evoluir seus pilares.
+        </p>
+      `}
 
       <!-- Contextual Inspector (Active Pillar) -->
       <div class="triangle-context-panel ${selectedContext ? 'visible' : ''}" id="triangle-context-panel">
@@ -224,27 +234,39 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
             <div class="triangle-context-top">
               <div class="context-pillar-header">
                 <span class="triangle-context-pillar">${selectedContext.title}</span>
-                <span class="context-distance-badge">
-                  Distância: ${selectedContext.distance} ${selectedContext.distance === 1 ? 'ponto' : 'pontos'}
-                </span>
+                <span class="context-level-badge">Nível ${selectedContext.levelInfo.level}</span>
+                ${hasAlterEgo ? `
+                  <span class="context-distance-badge">
+                    ${selectedContext.distance === 0 ? 'Alvo atingido' : `Faltam ${selectedContext.distance}% para o alvo`}
+                  </span>
+                ` : ''}
               </div>
               <button class="triangle-context-dismiss" id="triangle-dismiss-btn" aria-label="Fechar">&times;</button>
             </div>
 
             <div class="context-stats-grid">
               <div class="context-stat-box">
-                <span class="stat-box-label">Alter Ego (Alvo)</span>
-                <span class="stat-box-value">${selectedContext.target}%</span>
+                <span class="stat-box-label">XP Acumulada</span>
+                <span class="stat-box-value">${selectedContext.xp} XP</span>
               </div>
               <div class="context-stat-box">
-                <span class="stat-box-label">Evolução Atual</span>
-                <span class="stat-box-value ${selectedContext.hasGoals ? 'active' : ''}">
-                  ${selectedContext.hasGoals ? `${selectedContext.progress}%` : 'Sem metas'}
-                </span>
+                <span class="stat-box-label">Escala no Triângulo</span>
+                <span class="stat-box-value active">${selectedContext.progressPercent}%</span>
               </div>
+              ${hasAlterEgo ? `
+                <div class="context-stat-box">
+                  <span class="stat-box-label">Alvo Alter Ego</span>
+                  <span class="stat-box-value">${selectedContext.target}%</span>
+                </div>
+              ` : `
+                <div class="context-stat-box">
+                  <span class="stat-box-label">Próximo Nível</span>
+                  <span class="stat-box-value">${selectedContext.levelInfo.currentLevelXp} / ${selectedContext.levelInfo.xpForNextLevel} XP</span>
+                </div>
+              `}
             </div>
 
-            <!-- Traits from Alter Ego -->
+            <!-- Traits from Alter Ego if configured -->
             ${selectedContext.traits.length > 0 ? `
               <div class="context-traits-row">
                 ${selectedContext.traits.map(t => `<span class="context-trait-chip">${t}</span>`).join('')}
@@ -254,14 +276,14 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
             <!-- Goals List -->
             <div class="context-goals-section">
               <div class="context-goals-header">
-                <span class="context-goals-title">Metas Responsáveis (${selectedContext.goals.length})</span>
+                <span class="context-goals-title">Metas de ${selectedContext.title} (${selectedContext.goals.length})</span>
                 <button class="btn-add-meta-small" id="btn-add-meta-context" data-pillar="${selectedContext.pillarId}">
-                  ${icon('plus', 12)} Adicionar Meta
+                  ${icon('plus', 12)} Adicionar Meta (+100 XP)
                 </button>
               </div>
 
               ${selectedContext.goals.length === 0 ? `
-                <p class="context-no-goals">Nenhuma meta associada a este pilar ainda. Adicione uma meta para começar a evoluir.</p>
+                <p class="context-no-goals">Nenhuma meta associada a este pilar. Metas concluídas geram +100 XP!</p>
               ` : `
                 <div class="context-goals-list">
                   ${selectedContext.goals.map(g => `
@@ -270,7 +292,7 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
                         <span class="goal-item-title">${g.title}</span>
                         <div class="goal-item-controls">
                           <button class="goal-step-btn" data-action="decrement" data-goal-id="${g.id}">-10%</button>
-                          <span class="goal-item-pct">${g.progress}%</span>
+                          <span class="goal-item-pct ${g.completed ? 'completed' : ''}">${g.progress}%</span>
                           <button class="goal-step-btn" data-action="increment" data-goal-id="${g.id}">+10%</button>
                           <button class="goal-edit-btn" data-action="edit" data-goal-id="${g.id}" title="Editar Meta">
                             ${icon('edit', 13)}
@@ -280,6 +302,7 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
                       <div class="goal-mini-bar">
                         <div class="goal-mini-fill" style="width: ${g.progress}%"></div>
                       </div>
+                      ${g.completed ? `<div class="goal-rewarded-badge">${icon('check', 11)} +100 XP Concedido</div>` : ''}
                     </div>
                   `).join('')}
                 </div>
@@ -287,21 +310,22 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
             </div>
           </div>
         ` : `
-          <p class="triangle-context-hint">Toque em Mente, Corpo ou Alma para gerenciar metas e ver a distância para o Alter Ego</p>
+          <p class="triangle-context-hint">Toque em Mente, Corpo ou Alma para inspecionar nível, XP e metas</p>
         `}
       </div>
     </section>
   `;
 }
 
-function getContextData(pillarId: PillarId, state: AppState) {
+function getContextData(pillarId: PillarId, state: AppState, scaleMax: number) {
   const alterEgo = state.alterEgo;
   const pillarInfo = alterEgo ? alterEgo[pillarId] : { target: 80, traits: [] };
-  const evol = getPillarEvolution(state, pillarId);
+  const xp = state.pillarXp?.[pillarId] || 0;
+  const levelInfo = getPillarLevelInfo(xp);
+  const progressPercent = getPillarProgressPercent(xp, scaleMax);
   const goals = getPillarGoals(state, pillarId);
   const target = pillarInfo.target;
-  const progress = evol.progress;
-  const distance = Math.max(0, target - progress);
+  const distance = Math.max(0, target - progressPercent);
 
   const titles: Record<PillarId, string> = {
     mente: 'MENTE',
@@ -312,10 +336,11 @@ function getContextData(pillarId: PillarId, state: AppState) {
   return {
     pillarId,
     title: titles[pillarId],
+    xp,
+    levelInfo,
+    progressPercent,
     target,
-    progress,
     distance,
-    hasGoals: evol.hasGoals,
     traits: pillarInfo.traits || [],
     goals,
   };
@@ -341,18 +366,6 @@ export function bindEvolutionTriangleEvents(
     });
   };
   card.querySelector('#btn-open-alter-ego')?.addEventListener('click', openAlterEgoHandler);
-  card.querySelector('#btn-empty-alter-ego')?.addEventListener('click', openAlterEgoHandler);
-
-  // Open Goal Modal (empty state)
-  card.querySelector('#btn-empty-create-goal')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    openGoalModal(state, {
-      onSave: (newState) => {
-        callbacks.onStateChange(newState);
-        callbacks.onRerender();
-      },
-    });
-  });
 
   // Pillar Vertex Click Handlers
   card.querySelectorAll('[data-pillar-vertex]').forEach(el => {
@@ -376,7 +389,7 @@ export function bindEvolutionTriangleEvents(
   // Add goal button inside context
   card.querySelector('#btn-add-meta-context')?.addEventListener('click', (e) => {
     e.preventDefault();
-    const targetPillar = (e.currentTarget as HTMLElement).getAttribute('data-pillar') as PillarId || 'mente';
+    const targetPillar = ((e.currentTarget as HTMLElement).getAttribute('data-pillar') as PillarId) || 'mente';
     openGoalModal(state, {
       defaultPillar: targetPillar,
       onSave: (newState) => {
