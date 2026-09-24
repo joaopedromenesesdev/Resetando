@@ -16,10 +16,10 @@ import { icon } from './icons';
 let selectedPillar: PillarId | null = null;
 
 const VIEW_WIDTH = 400;
-const VIEW_HEIGHT = 315;
+const VIEW_HEIGHT = 300;
 const CX = 200;
-const CY = 182;
-const RADIUS = 148;
+const CY = 176;
+const RADIUS = 144;
 
 // Outer reference vertices at 100%
 const VM = { x: CX, y: CY - RADIUS };
@@ -165,28 +165,28 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
 
           <!-- MENTE Vertex Labels (Top) -->
           <g class="triangle-vertex-group ${selectedPillar === 'mente' ? 'selected' : ''}" data-pillar-vertex="mente" role="button" tabindex="0">
-            <circle cx="${CX}" cy="20" r="36" class="triangle-touch-target" />
+            <circle cx="${CX}" cy="18" r="34" class="triangle-touch-target" />
             <text x="${CX}" y="14" class="triangle-label-name" text-anchor="middle">MENTE</text>
             <text x="${CX}" y="27" class="triangle-label-stats" text-anchor="middle">
-              ${hasAlterEgo ? (menteEvol.hasGoals ? `Alvo: ${targetM}% · Atual: ${menteEvol.progress}%` : `Alvo: ${targetM}% · Sem metas`) : 'Definir'}
+              ${hasAlterEgo ? (menteEvol.hasGoals ? `Alvo: ${targetM}% · Atual: ${menteEvol.progress}%` : `Alvo: ${targetM}%`) : 'Definir'}
             </text>
           </g>
 
           <!-- CORPO Vertex Labels (Bottom-Left) -->
           <g class="triangle-vertex-group ${selectedPillar === 'corpo' ? 'selected' : ''}" data-pillar-vertex="corpo" role="button" tabindex="0">
-            <circle cx="${(VC.x).toFixed(1)}" cy="280" r="36" class="triangle-touch-target" />
-            <text x="${(VC.x).toFixed(1)}" y="280" class="triangle-label-name" text-anchor="middle">CORPO</text>
-            <text x="${(VC.x).toFixed(1)}" y="294" class="triangle-label-stats" text-anchor="middle">
-              ${hasAlterEgo ? (corpoEvol.hasGoals ? `Alvo: ${targetC}% · Atual: ${corpoEvol.progress}%` : `Alvo: ${targetC}% · Sem metas`) : 'Definir'}
+            <circle cx="85" cy="272" r="34" class="triangle-touch-target" />
+            <text x="85" y="270" class="triangle-label-name" text-anchor="middle">CORPO</text>
+            <text x="85" y="284" class="triangle-label-stats" text-anchor="middle">
+              ${hasAlterEgo ? (corpoEvol.hasGoals ? `Alvo: ${targetC}% · Atual: ${corpoEvol.progress}%` : `Alvo: ${targetC}%`) : 'Definir'}
             </text>
           </g>
 
           <!-- ALMA Vertex Labels (Bottom-Right) -->
           <g class="triangle-vertex-group ${selectedPillar === 'alma' ? 'selected' : ''}" data-pillar-vertex="alma" role="button" tabindex="0">
-            <circle cx="${(VA.x).toFixed(1)}" cy="280" r="36" class="triangle-touch-target" />
-            <text x="${(VA.x).toFixed(1)}" y="280" class="triangle-label-name" text-anchor="middle">ALMA</text>
-            <text x="${(VA.x).toFixed(1)}" y="294" class="triangle-label-stats" text-anchor="middle">
-              ${hasAlterEgo ? (almaEvol.hasGoals ? `Alvo: ${targetA}% · Atual: ${almaEvol.progress}%` : `Alvo: ${targetA}% · Sem metas`) : 'Definir'}
+            <circle cx="315" cy="272" r="34" class="triangle-touch-target" />
+            <text x="315" y="270" class="triangle-label-name" text-anchor="middle">ALMA</text>
+            <text x="315" y="284" class="triangle-label-stats" text-anchor="middle">
+              ${hasAlterEgo ? (almaEvol.hasGoals ? `Alvo: ${targetA}% · Atual: ${almaEvol.progress}%` : `Alvo: ${targetA}%`) : 'Definir'}
             </text>
           </g>
         </svg>

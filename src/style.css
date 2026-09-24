@@ -621,7 +621,7 @@ a {
   background: var(--bg-card);
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-lg);
-  padding: var(--spacing-md) var(--spacing-xs);
+  padding: var(--spacing-md);
   margin-bottom: var(--spacing-lg);
   position: relative;
   overflow: hidden;
@@ -837,19 +837,19 @@ a {
 
 .triangle-label-name {
   font-family: var(--font-family);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 1.5px;
   fill: var(--gold-primary);
   transition: fill var(--transition-fast);
 }
 
 .triangle-label-stats {
   font-family: var(--font-family);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 500;
   fill: var(--text-secondary);
-  letter-spacing: 0.3px;
+  letter-spacing: 0.2px;
   transition: fill var(--transition-fast);
 }
 
