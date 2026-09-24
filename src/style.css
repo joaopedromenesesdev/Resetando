@@ -621,7 +621,7 @@ a {
   background: var(--bg-card);
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-lg);
-  padding: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-xs);
   margin-bottom: var(--spacing-lg);
   position: relative;
   overflow: hidden;
@@ -720,19 +720,31 @@ a {
   font-weight: 600;
 }
 
+.triangle-empty-banner .btn-primary {
+  width: auto;
+  min-width: 180px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  padding: 8px 24px;
+  border-radius: var(--radius-full);
+}
+
 .triangle-svg-wrapper {
   width: 100%;
-  max-width: 390px;
+  max-width: 100%;
   margin: 0 auto;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 4px 0 8px;
+  padding: 8px 0;
 }
 
 .triangle-svg {
   display: block;
   width: 100%;
+  max-width: 100%;
   height: auto;
   overflow: visible;
   -webkit-user-select: none;
@@ -740,68 +752,71 @@ a {
 }
 
 .triangle-spoke {
-  stroke: rgba(212, 175, 55, 0.16);
-  stroke-dasharray: 2 2;
+  stroke: rgba(212, 175, 55, 0.22);
+  stroke-dasharray: 3 3;
   stroke-width: 1px;
 }
 
 .triangle-guide {
   fill: none;
-  stroke: rgba(212, 175, 55, 0.10);
-  stroke-dasharray: 3 3;
+  stroke: rgba(212, 175, 55, 0.12);
+  stroke-dasharray: 4 4;
   stroke-width: 1px;
 }
 
 .triangle-guide.guide-75 {
-  stroke: rgba(212, 175, 55, 0.14);
+  stroke: rgba(212, 175, 55, 0.18);
 }
 
 .triangle-outer {
   fill: none;
-  stroke: rgba(212, 175, 55, 0.35);
-  stroke-width: 1.2px;
+  stroke: rgba(212, 175, 55, 0.45);
+  stroke-width: 1.8px;
+  filter: drop-shadow(0 0 6px rgba(212, 175, 55, 0.25));
 }
 
 .triangle-center-point {
-  fill: rgba(212, 175, 55, 0.4);
+  fill: rgba(212, 175, 55, 0.6);
 }
 
 /* Alter Ego Destination Polygon (Discreet Gold Line) */
 .triangle-alter-ego-area {
-  fill: rgba(212, 175, 55, 0.04);
-  stroke: rgba(212, 175, 55, 0.55);
-  stroke-width: 1.8px;
-  stroke-dasharray: 4 3;
+  fill: rgba(212, 175, 55, 0.05);
+  stroke: rgba(240, 216, 120, 0.85);
+  stroke-width: 2.2px;
+  stroke-dasharray: 5 4;
   stroke-linejoin: round;
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.35));
 }
 
 .triangle-target-dot {
   fill: var(--bg-card);
-  stroke: var(--gold-dim);
-  stroke-width: 1.5px;
+  stroke: var(--gold-primary);
+  stroke-width: 1.8px;
 }
 
 /* Evolution Progress Polygon (Translucent Gold with Strong Stroke) */
 .triangle-inner-area {
-  fill: rgba(212, 175, 55, 0.22);
+  fill: rgba(212, 175, 55, 0.28);
   stroke: var(--gold-primary);
-  stroke-width: 2.2px;
+  stroke-width: 2.8px;
   stroke-linejoin: round;
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.5));
 }
 
 .triangle-inner-dot {
   fill: var(--gold-light);
   stroke: var(--gold-primary);
-  stroke-width: 1.2px;
+  stroke-width: 1.5px;
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .triangle-outer-dot {
   fill: var(--bg-card);
-  stroke: var(--border-medium);
-  stroke-width: 1.5px;
+  stroke: var(--border-strong);
+  stroke-width: 1.8px;
   transition: all var(--transition-fast);
 }
 
@@ -822,16 +837,16 @@ a {
 
 .triangle-label-name {
   font-family: var(--font-family);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 1.5px;
+  letter-spacing: 2px;
   fill: var(--gold-primary);
   transition: fill var(--transition-fast);
 }
 
 .triangle-label-stats {
   font-family: var(--font-family);
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 500;
   fill: var(--text-secondary);
   letter-spacing: 0.3px;
