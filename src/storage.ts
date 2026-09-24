@@ -3,8 +3,12 @@
 // localStorage-based, ready for Supabase migration
 // ========================================
 
-import type { AppState, Habit, DailyHabit, PillarId, AlterEgo, Goal, PillarXp } from './models';
-import { showXpToast } from './progression';
+import type { AppState, Habit, DailyHabit, PillarId, AlterEgo, Goal } from './models';
+import {
+  addXP,
+  getDefaultUserProgress,
+  checkAndProcessLevelUp,
+} from './progression';
 
 const PRIMARY_STORAGE_KEY = 'resetando_data';
 const LEGACY_STORAGE_KEY = '3pilares_data';
@@ -52,6 +56,7 @@ export function formatNavDate(dateStr: string): string {
 }
 
 function getDefaultState(): AppState {
+  const progress = getDefaultUserProgress();
   return {
     onboardingComplete: false,
     habits: [],
@@ -60,6 +65,8 @@ function getDefaultState(): AppState {
     goals: [],
     userName: '',
     createdAt: new Date().toISOString(),
+    progress,
+    xpEvents: [],
     totalXp: 0,
     pillarXp: { mente: 0, corpo: 0, alma: 0 },
   };
@@ -89,45 +96,36 @@ export function loadState(): AppState {
 
     let modified = false;
 
-    // Progression XP Migration & Validation
-    if (parsed.pillarXp === undefined || parsed.totalXp === undefined) {
-      const pillarXp: PillarXp = { mente: 0, corpo: 0, alma: 0 };
-      let totalXp = 0;
-
-      if (Array.isArray(parsed.dailyHabits)) {
-        parsed.dailyHabits.forEach(dh => {
-          if (dh.completed) {
-            dh.xpAwarded = true;
-            pillarXp[dh.pillarId] = (pillarXp[dh.pillarId] || 0) + 10;
-            totalXp += 10;
-          }
-        });
+    // Progression XP & Events Migration
+    if (!parsed.progress) {
+      parsed.progress = getDefaultUserProgress();
+      if (parsed.pillarXp) {
+        parsed.progress.menteXP = parsed.pillarXp.mente || 0;
+        parsed.progress.corpoXP = parsed.pillarXp.corpo || 0;
+        parsed.progress.almaXP = parsed.pillarXp.alma || 0;
+        parsed.progress.totalXP = parsed.totalXp || (parsed.progress.menteXP + parsed.progress.corpoXP + parsed.progress.almaXP);
+        parsed.progress.currentCycleMenteXP = parsed.progress.menteXP;
+        parsed.progress.currentCycleCorpoXP = parsed.progress.corpoXP;
+        parsed.progress.currentCycleAlmaXP = parsed.progress.almaXP;
+        const check = checkAndProcessLevelUp(parsed.progress);
+        parsed.progress = check.newProgress;
       }
-
-      if (Array.isArray(parsed.goals)) {
-        parsed.goals.forEach(g => {
-          if (g.completed || g.progress >= 100) {
-            g.xpAwarded = true;
-            pillarXp[g.pillarId] = (pillarXp[g.pillarId] || 0) + 100;
-            totalXp += 100;
-          }
-        });
-      }
-
-      parsed.pillarXp = pillarXp;
-      parsed.totalXp = totalXp;
       modified = true;
-    } else {
-      parsed.pillarXp = {
-        mente: Math.max(0, parsed.pillarXp.mente || 0),
-        corpo: Math.max(0, parsed.pillarXp.corpo || 0),
-        alma: Math.max(0, parsed.pillarXp.alma || 0),
-      };
-      parsed.totalXp = Math.max(
-        0,
-        parsed.totalXp || (parsed.pillarXp.mente + parsed.pillarXp.corpo + parsed.pillarXp.alma)
-      );
     }
+
+    if (!Array.isArray(parsed.xpEvents)) {
+      parsed.xpEvents = [];
+      modified = true;
+    }
+
+    // Keep synchronized helper fields
+    parsed.totalXp = parsed.progress.totalXP;
+    parsed.pillarXp = {
+      mente: parsed.progress.menteXP,
+      corpo: parsed.progress.corpoXP,
+      alma: parsed.progress.almaXP,
+    };
+
 
     // Remove legacy pre-defined habits if present in user storage
     if (Array.isArray(parsed.habits)) {
@@ -303,48 +301,46 @@ export function getDailyHabitsForPillar(state: AppState, date: string, pillarId:
 }
 
 export function toggleDailyHabit(state: AppState, dailyHabitId: string): AppState {
-  let xpGained = 0;
-  let gainedPillar: PillarId | null = null;
+  const target = state.dailyHabits.find(dh => dh.id === dailyHabitId);
+  if (!target) return state;
 
-  const pillarXp: PillarXp = {
-    mente: state.pillarXp?.mente || 0,
-    corpo: state.pillarXp?.corpo || 0,
-    alma: state.pillarXp?.alma || 0,
-  };
-  let totalXp = state.totalXp || 0;
-
+  const nextCompleted = !target.completed;
   const dailyHabits = state.dailyHabits.map(dh => {
     if (dh.id === dailyHabitId) {
-      const nextCompleted = !dh.completed;
-      const alreadyAwarded = !!dh.xpAwarded;
-
-      // Award XP only on the first completion of this daily habit instance
-      if (nextCompleted && !alreadyAwarded) {
-        xpGained = 10;
-        gainedPillar = dh.pillarId;
-        pillarXp[dh.pillarId] = (pillarXp[dh.pillarId] || 0) + 10;
-        totalXp += 10;
-      }
-
       return {
         ...dh,
         completed: nextCompleted,
         completedAt: nextCompleted ? new Date().toISOString() : null,
-        // Once awarded, remains awarded (XP is never lost or duplicated on re-toggle)
-        xpAwarded: alreadyAwarded || nextCompleted,
+        xpAwarded: true,
       };
     }
     return dh;
   });
 
-  const newState = { ...state, dailyHabits, pillarXp, totalXp };
-  saveState(newState);
+  let newState: AppState = { ...state, dailyHabits };
 
-  // Immediate visual feedback
-  if (xpGained > 0 && gainedPillar) {
-    showXpToast(xpGained, gainedPillar);
+  if (nextCompleted) {
+    // 1. Award habit completion XP (+10 XP)
+    const habitRef = `habit_${target.id}_${target.date}`;
+    newState = addXP(newState, target.pillarId, 10, 'habit_completion', habitRef).newState;
+
+    // 2. Check pillar completion bonus (3 of 3 habits of that pillar: +15 XP)
+    const pillarHabits = newState.dailyHabits.filter(h => h.pillarId === target.pillarId && h.date === target.date);
+    if (pillarHabits.length > 0 && pillarHabits.every(h => h.completed)) {
+      const pillarBonusRef = `bonus_pillar_${target.pillarId}_${target.date}`;
+      newState = addXP(newState, target.pillarId, 15, 'pillar_bonus', pillarBonusRef).newState;
+    }
+
+    // 3. Check perfect day bonus (all habits for date completed: +10 XP Mente, +10 XP Corpo, +10 XP Alma)
+    const allDateHabits = newState.dailyHabits.filter(h => h.date === target.date);
+    if (allDateHabits.length >= 3 && allDateHabits.every(h => h.completed)) {
+      newState = addXP(newState, 'mente', 10, 'perfect_day_bonus', `bonus_perfect_day_mente_${target.date}`).newState;
+      newState = addXP(newState, 'corpo', 10, 'perfect_day_bonus', `bonus_perfect_day_corpo_${target.date}`).newState;
+      newState = addXP(newState, 'alma', 10, 'perfect_day_bonus', `bonus_perfect_day_alma_${target.date}`).newState;
+    }
   }
 
+  saveState(newState);
   return newState;
 }
 
@@ -481,22 +477,15 @@ export function createGoal(
     xpAwarded: isCompleted,
   };
 
-  const pillarXp: PillarXp = {
-    mente: state.pillarXp?.mente || 0,
-    corpo: state.pillarXp?.corpo || 0,
-    alma: state.pillarXp?.alma || 0,
-  };
-  let totalXp = state.totalXp || 0;
+  const goals = state.goals || [];
+  let newState = { ...state, goals: [...goals, newGoal] };
 
   if (isCompleted) {
-    pillarXp[pillarId] += 100;
-    totalXp += 100;
-    showXpToast(100, pillarId);
+    newState = addXP(newState, pillarId, 100, 'goal_completion', `goal_${newGoal.id}`).newState;
+  } else {
+    saveState(newState);
   }
 
-  const goals = state.goals || [];
-  const newState = { ...state, goals: [...goals, newGoal], pillarXp, totalXp };
-  saveState(newState);
   return newState;
 }
 
@@ -510,36 +499,26 @@ export function updateGoalProgress(
   const targetGoal = goals.find(g => g.id === goalId);
   if (!targetGoal) return state;
 
-  const pillarXp: PillarXp = {
-    mente: state.pillarXp?.mente || 0,
-    corpo: state.pillarXp?.corpo || 0,
-    alma: state.pillarXp?.alma || 0,
-  };
-  let totalXp = state.totalXp || 0;
-
   const isCompleted = clampedProgress >= 100;
-  const shouldAwardXp = isCompleted && !targetGoal.xpAwarded;
-
-  if (shouldAwardXp) {
-    pillarXp[targetGoal.pillarId] += 100;
-    totalXp += 100;
-    showXpToast(100, targetGoal.pillarId);
-  }
-
   const updatedGoals = goals.map(g =>
     g.id === goalId
       ? {
           ...g,
           progress: clampedProgress,
           completed: isCompleted,
-          xpAwarded: g.xpAwarded || shouldAwardXp,
           updatedAt: new Date().toISOString(),
         }
       : g
   );
 
-  const newState = { ...state, goals: updatedGoals, pillarXp, totalXp };
-  saveState(newState);
+  let newState = { ...state, goals: updatedGoals };
+
+  if (isCompleted) {
+    newState = addXP(newState, targetGoal.pillarId, 100, 'goal_completion', `goal_${targetGoal.id}`).newState;
+  } else {
+    saveState(newState);
+  }
+
   return newState;
 }
 
@@ -556,22 +535,7 @@ export function updateGoal(
     ? Math.max(0, Math.min(100, Math.round(updates.progress)))
     : targetGoal.progress;
   const newPillarId = updates.pillarId || targetGoal.pillarId;
-
-  const pillarXp: PillarXp = {
-    mente: state.pillarXp?.mente || 0,
-    corpo: state.pillarXp?.corpo || 0,
-    alma: state.pillarXp?.alma || 0,
-  };
-  let totalXp = state.totalXp || 0;
-
   const isCompleted = newProgress >= 100;
-  const shouldAwardXp = isCompleted && !targetGoal.xpAwarded;
-
-  if (shouldAwardXp) {
-    pillarXp[newPillarId] += 100;
-    totalXp += 100;
-    showXpToast(100, newPillarId);
-  }
 
   const updatedGoals = goals.map(g => {
     if (g.id !== goalId) return g;
@@ -581,13 +545,18 @@ export function updateGoal(
       pillarId: newPillarId,
       progress: newProgress,
       completed: isCompleted,
-      xpAwarded: g.xpAwarded || shouldAwardXp,
       updatedAt: new Date().toISOString(),
     };
   });
 
-  const newState = { ...state, goals: updatedGoals, pillarXp, totalXp };
-  saveState(newState);
+  let newState = { ...state, goals: updatedGoals };
+
+  if (isCompleted) {
+    newState = addXP(newState, newPillarId, 100, 'goal_completion', `goal_${targetGoal.id}`).newState;
+  } else {
+    saveState(newState);
+  }
+
   return newState;
 }
 
@@ -618,16 +587,21 @@ export function getPillarEvolution(state: AppState, pillarId: PillarId): {
 }
 
 export function getPillarXp(state: AppState, pillarId: PillarId): number {
+  if (state.progress) {
+    if (pillarId === 'mente') return state.progress.menteXP || 0;
+    if (pillarId === 'corpo') return state.progress.corpoXP || 0;
+    if (pillarId === 'alma') return state.progress.almaXP || 0;
+  }
   return state.pillarXp?.[pillarId] || 0;
 }
 
 export function getTotalXp(state: AppState): number {
-  if (state.totalXp !== undefined) return state.totalXp;
-  return (
+  return state.progress?.totalXP ?? state.totalXp ?? (
     (state.pillarXp?.mente || 0) +
     (state.pillarXp?.corpo || 0) +
     (state.pillarXp?.alma || 0)
   );
 }
+
 
 

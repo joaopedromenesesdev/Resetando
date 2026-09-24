@@ -70,6 +70,27 @@ export interface Goal {
   xpAwarded?: boolean;
 }
 
+export interface UserProgress {
+  totalXP: number;
+  menteXP: number;
+  corpoXP: number;
+  almaXP: number;
+  currentLevel: number;
+  currentCycleMenteXP: number;
+  currentCycleCorpoXP: number;
+  currentCycleAlmaXP: number;
+}
+
+export interface XPEvent {
+  id: string;
+  userId?: string;
+  pillar: PillarId;
+  amount: number;
+  source: string;
+  referenceId: string;
+  createdAt: string;
+}
+
 export interface AppState {
   onboardingComplete: boolean;
   habits: Habit[];
@@ -79,9 +100,13 @@ export interface AppState {
   userName: string;
   createdAt: string;
   // Progression System
-  totalXp: number;
-  pillarXp: PillarXp;
+  progress: UserProgress;
+  xpEvents: XPEvent[];
+  // Backwards compatibility / helpers
+  totalXp?: number;
+  pillarXp?: PillarXp;
 }
 
 export type TabId = 'hoje' | 'evolucao' | 'historico' | 'habitos' | 'perfil';
+
 

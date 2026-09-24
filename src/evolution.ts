@@ -1,7 +1,7 @@
 // ========================================
 // Resetando — Minha Evolução Screen
 // Dedicated progression dashboard:
-// Triângulo de Evolução, XP dos Pilares, Níveis, Metas e Alter Ego
+// Triângulo de Evolução do Nível Atual, XP do Ciclo, Histórico Total e Metas
 // ========================================
 
 import type { AppState, PillarId } from './models';
@@ -11,10 +11,7 @@ import {
   updateGoalProgress,
 } from './storage';
 import {
-  getGlobalLevelInfo,
-  getPillarLevelInfo,
-  getEvolutionScale,
-  getPillarProgressPercent,
+  getCurrentLevelProgress,
 } from './progression';
 import {
   renderEvolutionTriangleHtml,
@@ -36,55 +33,75 @@ export function renderEvolution(
   const alterEgo = state.alterEgo;
   const hasAlterEgo = !!alterEgo;
 
-  const totalXp = state.totalXp || 0;
-  const globalLevel = getGlobalLevelInfo(totalXp);
+  const progress = state.progress;
+  const levelData = getCurrentLevelProgress(progress);
+  const currentLevel = levelData.currentLevel;
+  const requiredXP = levelData.requiredXP;
+  const nextLevel = currentLevel + 1;
+  const totalXP = progress.totalXP || 0;
 
-  const menteXp = state.pillarXp?.mente || 0;
-  const corpoXp = state.pillarXp?.corpo || 0;
-  const almaXp = state.pillarXp?.alma || 0;
-
-  const maxPillarXp = Math.max(menteXp, corpoXp, almaXp);
-  const scale = getEvolutionScale(maxPillarXp);
-  const scaleMax = scale.tierMax;
+  // Average completion of current level
+  const avgLevelProgress = Math.round(
+    (levelData.mente.percent + levelData.corpo.percent + levelData.alma.percent) / 3
+  );
 
   container.innerHTML = `
     <div class="page">
       <div class="page-header">
-        <p class="page-label">desenvolvimento acumulado</p>
+        <p class="page-label">desenvolvimento pessoal</p>
         <h1 class="page-title">Minha Evolução</h1>
       </div>
 
-      <!-- Global Progression Overview Card -->
+      <!-- Current Level & Historical XP Overview Card (Section 13) -->
       <div class="evolution-overview-card">
         <div class="overview-top">
           <div class="overview-level-wrap">
-            <span class="overview-badge">NÍVEL GLOBAL</span>
-            <div class="overview-level-number">${globalLevel.level}</div>
+            <span class="overview-badge">NÍVEL ATUAL</span>
+            <div class="overview-level-number">${currentLevel}</div>
           </div>
           <div class="overview-xp-wrap">
-            <span class="overview-xp-value">${totalXp.toLocaleString('pt-BR')} <span class="overview-xp-unit">XP</span></span>
-            <span class="overview-xp-sub">${globalLevel.currentLevelXp} / ${globalLevel.xpForNextLevel} XP para Nível ${globalLevel.level + 1}</span>
+            <span class="overview-xp-value">${totalXP.toLocaleString('pt-BR')} <span class="overview-xp-unit">XP TOTAL</span></span>
+            <span class="overview-xp-sub">Próximo: Nível ${nextLevel} (${(requiredXP * 2).toLocaleString('pt-BR')} XP por pilar)</span>
           </div>
         </div>
-        <div class="overview-bar">
-          <div class="overview-fill" style="width: ${globalLevel.progressPercent}%"></div>
+
+        <div class="overview-cycle-summary">
+          <div class="cycle-summary-header">
+            <span class="cycle-summary-title">Progresso do Ciclo (${avgLevelProgress}%)</span>
+            <span class="cycle-summary-meta">Requisito: ${requiredXP.toLocaleString('pt-BR')} XP por pilar</span>
+          </div>
+          <div class="overview-bar">
+            <div class="overview-fill" style="width: ${avgLevelProgress}%"></div>
+          </div>
         </div>
       </div>
 
       <!-- Evolution Triangle Graphic Section -->
       ${renderEvolutionTriangleHtml(state)}
 
-      <!-- Pillars Progression Cards -->
+      <!-- Pillars Progression Breakdown for Current Level (Section 13) -->
       <div class="section-title-wrap">
-        <h3 class="section-title">Evolução por Pilar</h3>
-        <span class="section-subtitle">XP acumulada em cada dimensão</span>
+        <h3 class="section-title">Progresso do Nível ${currentLevel}</h3>
+        <span class="section-subtitle">XP acumulado no ciclo atual para avançar de nível</span>
       </div>
 
       <div class="evolution-pillars-grid">
         ${PILLARS.map(p => {
-          const xp = state.pillarXp?.[p.id] || 0;
-          const levelInfo = getPillarLevelInfo(xp);
-          const pct = getPillarProgressPercent(xp, scaleMax);
+          let cycleXP = 0;
+          let historicalXP = 0;
+
+          if (p.id === 'mente') {
+            cycleXP = progress.currentCycleMenteXP || 0;
+            historicalXP = progress.menteXP || 0;
+          } else if (p.id === 'corpo') {
+            cycleXP = progress.currentCycleCorpoXP || 0;
+            historicalXP = progress.corpoXP || 0;
+          } else if (p.id === 'alma') {
+            cycleXP = progress.currentCycleAlmaXP || 0;
+            historicalXP = progress.almaXP || 0;
+          }
+
+          const pct = Math.min(100, Math.round((cycleXP / requiredXP) * 100));
           const goals = getPillarGoals(state, p.id);
           const target = alterEgo ? alterEgo[p.id].target : null;
 
@@ -95,49 +112,33 @@ export function renderEvolution(
                   <span class="pillar-icon">${pillarIcon(p.id, 18)}</span>
                   <span class="pillar-card-title">${p.name}</span>
                 </div>
-                <div class="pillar-level-pill">
-                  Nível ${levelInfo.level}
+                <div class="pillar-level-pill ${pct >= 100 ? 'ready' : ''}">
+                  ${pct >= 100 ? `${icon('check', 12)} Requisito Atingido` : `${pct}% do nível`}
                 </div>
               </div>
 
-              <div class="pillar-xp-stats">
-                <div class="pillar-xp-stat">
-                  <span class="xp-stat-label">XP Acumulada</span>
-                  <span class="xp-stat-num">${xp.toLocaleString('pt-BR')} XP</span>
-                </div>
-                <div class="pillar-xp-stat">
-                  <span class="xp-stat-label">Triângulo</span>
-                  <span class="xp-stat-num active">${pct}%</span>
-                </div>
-                ${target !== null ? `
-                  <div class="pillar-xp-stat">
-                    <span class="xp-stat-label">Alvo Alter Ego</span>
-                    <span class="xp-stat-num">${target}%</span>
-                  </div>
-                ` : ''}
-              </div>
-
-              <!-- Level Progress Bar -->
+              <!-- Cycle Progress Bar -->
               <div class="pillar-level-bar-wrap">
                 <div class="pillar-level-bar">
-                  <div class="pillar-level-fill" style="width: ${levelInfo.progressPercent}%"></div>
+                  <div class="pillar-level-fill" style="width: ${pct}%"></div>
                 </div>
-                <span class="pillar-level-hint">
-                  ${levelInfo.currentLevelXp} / ${levelInfo.xpForNextLevel} XP para Nível ${levelInfo.level + 1}
-                </span>
+                <div class="pillar-cycle-nums">
+                  <span class="cycle-current">${cycleXP.toLocaleString('pt-BR')} / ${requiredXP.toLocaleString('pt-BR')} XP</span>
+                  ${target !== null ? `<span class="cycle-historical">Alvo: ${target}% · Total: ${historicalXP.toLocaleString('pt-BR')} XP</span>` : `<span class="cycle-historical">Total: ${historicalXP.toLocaleString('pt-BR')} XP</span>`}
+                </div>
               </div>
 
               <!-- Goals for this Pillar -->
               <div class="pillar-goals-preview">
                 <div class="pillar-goals-head">
-                  <span class="goals-head-label">Metas (${goals.length})</span>
+                  <span class="goals-head-label">Metas de ${p.name} (${goals.length})</span>
                   <button class="btn-pillar-add-goal" data-add-goal-pillar="${p.id}">
-                    ${icon('plus', 12)} Adicionar Meta
+                    ${icon('plus', 12)} Nova Meta (+100 XP)
                   </button>
                 </div>
 
                 ${goals.length === 0 ? `
-                  <p class="pillar-no-goals">Nenhuma meta ativa. Concluir uma meta rende +100 XP.</p>
+                  <p class="pillar-no-goals">Nenhuma meta ativa. Concluir uma meta rende +100 XP para o ciclo!</p>
                 ` : `
                   <div class="pillar-goals-mini-list">
                     ${goals.map(g => `
@@ -166,7 +167,7 @@ export function renderEvolution(
         }).join('')}
       </div>
 
-      <!-- Optional Alter Ego Promo/Card (if user hasn't set one yet) -->
+      <!-- Optional Alter Ego Reference Info (Section 17) -->
       ${!hasAlterEgo ? `
         <div class="alter-ego-optional-card">
           <div class="optional-card-content">
@@ -174,7 +175,7 @@ export function renderEvolution(
             <div class="optional-card-text">
               <h4 class="optional-card-title">Alter Ego (Opcional)</h4>
               <p class="optional-card-desc">
-                Defina uma referência pessoal de onde você quer chegar para comparar com sua evolução atual.
+                Defina uma referência pessoal de onde você quer chegar para visualizar junto ao seu triângulo.
               </p>
             </div>
           </div>
@@ -219,7 +220,7 @@ export function renderEvolution(
     });
   });
 
-  // Goal step buttons (-10% / +10% / edit)
+  // Goal step buttons (-10% / +10%)
   container.querySelectorAll('[data-goal-step]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();

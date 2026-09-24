@@ -1,8 +1,8 @@
 // ========================================
 // Resetando — Triângulo de Evolução
-// Visual map of accumulated evolution:
-// XP-Driven Triangle: Mente, Corpo, Alma (Accumulated XP)
-// Alter Ego: Completely Optional Reference Layer ("Onde quero chegar")
+// Visual map of accumulated evolution for the CURRENT LEVEL:
+// HÁBITOS → XP → PILARES → TRIÂNGULO → NÍVEL
+// Alter Ego: Optional visual reference layer
 // ========================================
 
 import type { AppState, PillarId } from './models';
@@ -11,9 +11,7 @@ import {
   updateGoalProgress,
 } from './storage';
 import {
-  getPillarLevelInfo,
-  getEvolutionScale,
-  getPillarProgressPercent,
+  getCurrentLevelProgress,
 } from './progression';
 import { openAlterEgoModal, openGoalModal } from './goals_modal';
 import { icon } from './icons';
@@ -54,36 +52,28 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
   const alterEgo = state.alterEgo;
   const hasAlterEgo = !!alterEgo;
 
-  const menteXp = state.pillarXp?.mente || 0;
-  const corpoXp = state.pillarXp?.corpo || 0;
-  const almaXp = state.pillarXp?.alma || 0;
+  const progress = state.progress;
+  const levelData = getCurrentLevelProgress(progress);
+  const currentLevel = levelData.currentLevel;
+  const requiredXP = levelData.requiredXP;
 
-  const menteLevel = getPillarLevelInfo(menteXp);
-  const corpoLevel = getPillarLevelInfo(corpoXp);
-  const almaLevel = getPillarLevelInfo(almaXp);
+  // Normalized progress ratios for current cycle (0 at center, 1 at outer vertices)
+  const rem = levelData.mente.progressRatio;
+  const rec = levelData.corpo.progressRatio;
+  const rea = levelData.alma.progressRatio;
 
-  // Dynamic Scale without permanent artificial limits
-  const maxPillarXp = Math.max(menteXp, corpoXp, almaXp);
-  const scale = getEvolutionScale(maxPillarXp);
-  const scaleMax = scale.tierMax;
+  const pctM = levelData.mente.percent;
+  const pctC = levelData.corpo.percent;
+  const pctA = levelData.alma.percent;
 
-  // Normalized progress percentage for each pillar (0% at center, 100% at outer vertex)
-  const pctM = getPillarProgressPercent(menteXp, scaleMax);
-  const pctC = getPillarProgressPercent(corpoXp, scaleMax);
-  const pctA = getPillarProgressPercent(almaXp, scaleMax);
-
-  const rem = pctM / 100;
-  const rec = pctC / 100;
-  const rea = pctA / 100;
-
-  // Internal Evolution Points (based strictly on XP)
+  // Internal Evolution Points (strictly based on current cycle XP)
   const pem = { x: CX + (VM.x - CX) * rem, y: CY + (VM.y - CY) * rem };
   const pec = { x: CX + (VC.x - CX) * rec, y: CY + (VC.y - CY) * rec };
   const pea = { x: CX + (VA.x - CX) * rea, y: CY + (VA.y - CY) * rea };
 
   const evolutionPointsStr = `${pem.x.toFixed(1)},${pem.y.toFixed(1)} ${pec.x.toFixed(1)},${pec.y.toFixed(1)} ${pea.x.toFixed(1)},${pea.y.toFixed(1)}`;
 
-  // Optional Alter Ego Reference Points
+  // Optional Alter Ego Reference Points (Destination / Targets 0-100%)
   const targetM = alterEgo ? alterEgo.mente.target : 0;
   const targetC = alterEgo ? alterEgo.corpo.target : 0;
   const targetA = alterEgo ? alterEgo.alma.target : 0;
@@ -98,24 +88,24 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
 
   const alterEgoPointsStr = `${ptm.x.toFixed(1)},${ptm.y.toFixed(1)} ${ptc.x.toFixed(1)},${ptc.y.toFixed(1)} ${pta.x.toFixed(1)},${pta.y.toFixed(1)}`;
 
-  // Guides
+  // Outer and Concentric Guides (25%, 50%, 75%, 100%)
   const outerTriangleStr = getGuideTrianglePoints(1.0);
   const guide75 = getGuideTrianglePoints(0.75);
   const guide50 = getGuideTrianglePoints(0.5);
   const guide25 = getGuideTrianglePoints(0.25);
 
-  const hasAnyProgress = menteXp > 0 || corpoXp > 0 || almaXp > 0;
-  const selectedContext = selectedPillar ? getContextData(selectedPillar, state, scaleMax) : null;
+  const hasAnyCycleProgress = progress.currentCycleMenteXP > 0 || progress.currentCycleCorpoXP > 0 || progress.currentCycleAlmaXP > 0;
+  const selectedContext = selectedPillar ? getContextData(selectedPillar, state, requiredXP) : null;
 
   return `
     <section class="evolution-triangle-card" id="evolution-triangle-card">
       <div class="triangle-header">
         <div class="triangle-header-left">
-          <span class="triangle-badge">Progresso Acumulado</span>
+          <span class="triangle-badge">NÍVEL ${currentLevel} · CICLO ATUAL</span>
           <h2 class="triangle-title">TRIÂNGULO DE EVOLUÇÃO</h2>
         </div>
         <div class="triangle-header-right">
-          <button class="btn-config-alter-ego ${hasAlterEgo ? 'active' : ''}" id="btn-open-alter-ego" title="Configurar Alter Ego (Opcional)">
+          <button class="btn-config-alter-ego ${hasAlterEgo ? 'active' : ''}" id="btn-open-alter-ego" title="Alter Ego (Opcional)">
             ${icon('target', 14)}
             <span>${hasAlterEgo ? alterEgo.name : 'Adicionar Alter Ego'}</span>
           </button>
@@ -123,7 +113,7 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
       </div>
 
       <div class="triangle-scale-info">
-        <span class="scale-label">Escala Atual: <strong>${scale.tierName}</strong> (até ${scaleMax.toLocaleString('pt-BR')} XP por pilar)</span>
+        <span class="scale-label">Requisito do Nível ${currentLevel}: <strong>${requiredXP.toLocaleString('pt-BR')} XP</strong> por pilar</span>
       </div>
 
       <!-- SVG Graph Section -->
@@ -134,7 +124,7 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
           width="100%"
           height="auto"
           role="img"
-          aria-label="Triângulo de Evolução baseado em XP"
+          aria-label="Triângulo de Evolução do Nível ${currentLevel}"
         >
           <!-- Spokes -->
           <line x1="${CX}" y1="${CY}" x2="${VM.x.toFixed(1)}" y2="${VM.y.toFixed(1)}" class="triangle-spoke" />
@@ -148,7 +138,7 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
           <polygon points="${outerTriangleStr}" class="triangle-outer" />
           <circle cx="${CX}" cy="${CY}" r="2.5" class="triangle-center-point" />
 
-          <!-- Optional Alter Ego Reference Triangle (Destino / Linha Dourada Discreta) -->
+          <!-- Optional Alter Ego Reference Triangle (Destino / Linha Tracejada) -->
           ${hasAlterEgo ? `
             <polygon
               id="alter-ego-polygon"
@@ -160,8 +150,8 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
             <circle cx="${pta.x.toFixed(1)}" cy="${pta.y.toFixed(1)}" r="3" class="triangle-target-dot" />
           ` : ''}
 
-          <!-- Evolution Triangle (Baseado estritamente em XP acumulada) -->
-          ${hasAnyProgress ? `
+          <!-- Evolution Triangle (Baseado no XP do Ciclo do Nível Atual) -->
+          ${hasAnyCycleProgress ? `
             <polygon
               id="evolution-progress-polygon"
               points="${evolutionPointsStr}"
@@ -171,7 +161,7 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
             <circle cx="${pec.x.toFixed(1)}" cy="${pec.y.toFixed(1)}" r="3.5" class="triangle-inner-dot vertex-corpo-dot" />
             <circle cx="${pea.x.toFixed(1)}" cy="${pea.y.toFixed(1)}" r="3.5" class="triangle-inner-dot vertex-alma-dot" />
           ` : `
-            <!-- At 0 XP, glowing center origin dot -->
+            <!-- Início do nível: ponto central iluminado -->
             <circle cx="${CX}" cy="${CY}" r="4" class="triangle-inner-dot origin-dot" />
           `}
 
@@ -185,7 +175,7 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
             <circle cx="${CX}" cy="18" r="34" class="triangle-touch-target" />
             <text x="${CX}" y="14" class="triangle-label-name" text-anchor="middle">MENTE</text>
             <text x="${CX}" y="27" class="triangle-label-stats" text-anchor="middle">
-              ${hasAlterEgo ? `Nvl ${menteLevel.level} (${pctM}%) · Alvo ${targetM}%` : `Nível ${menteLevel.level} · ${menteXp} XP`}
+              ${pctM}% (${progress.currentCycleMenteXP}/${requiredXP} XP)
             </text>
           </g>
 
@@ -194,7 +184,7 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
             <circle cx="85" cy="272" r="34" class="triangle-touch-target" />
             <text x="85" y="270" class="triangle-label-name" text-anchor="middle">CORPO</text>
             <text x="85" y="284" class="triangle-label-stats" text-anchor="middle">
-              ${hasAlterEgo ? `Nvl ${corpoLevel.level} (${pctC}%) · Alvo ${targetC}%` : `Nível ${corpoLevel.level} · ${corpoXp} XP`}
+              ${pctC}% (${progress.currentCycleCorpoXP}/${requiredXP} XP)
             </text>
           </g>
 
@@ -203,13 +193,13 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
             <circle cx="315" cy="272" r="34" class="triangle-touch-target" />
             <text x="315" y="270" class="triangle-label-name" text-anchor="middle">ALMA</text>
             <text x="315" y="284" class="triangle-label-stats" text-anchor="middle">
-              ${hasAlterEgo ? `Nvl ${almaLevel.level} (${pctA}%) · Alvo ${targetA}%` : `Nível ${almaLevel.level} · ${almaXp} XP`}
+              ${pctA}% (${progress.currentCycleAlmaXP}/${requiredXP} XP)
             </text>
           </g>
         </svg>
       </div>
 
-      <!-- Legend or Caption -->
+      <!-- Legend or Progress Notes -->
       ${hasAlterEgo ? `
         <div class="triangle-legend">
           <div class="legend-item">
@@ -218,12 +208,12 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
           </div>
           <div class="legend-item">
             <span class="legend-box legend-evolution"></span>
-            <span class="legend-text">Evolução Real (XP)</span>
+            <span class="legend-text">Progresso Nível ${currentLevel}</span>
           </div>
         </div>
       ` : `
         <p class="triangle-caption-note">
-          Continue acumulando XP para evoluir seus pilares.
+          Preencha os três pilares para avançar ao Nível ${currentLevel + 1}.
         </p>
       `}
 
@@ -234,7 +224,7 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
             <div class="triangle-context-top">
               <div class="context-pillar-header">
                 <span class="triangle-context-pillar">${selectedContext.title}</span>
-                <span class="context-level-badge">Nível ${selectedContext.levelInfo.level}</span>
+                <span class="context-level-badge">Ciclo: ${selectedContext.percent}%</span>
                 ${hasAlterEgo ? `
                   <span class="context-distance-badge">
                     ${selectedContext.distance === 0 ? 'Alvo atingido' : `Faltam ${selectedContext.distance}% para o alvo`}
@@ -246,12 +236,12 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
 
             <div class="context-stats-grid">
               <div class="context-stat-box">
-                <span class="stat-box-label">XP Acumulada</span>
-                <span class="stat-box-value">${selectedContext.xp} XP</span>
+                <span class="stat-box-label">XP do Nível ${currentLevel}</span>
+                <span class="stat-box-value active">${selectedContext.cycleXP} / ${requiredXP} XP</span>
               </div>
               <div class="context-stat-box">
-                <span class="stat-box-label">Escala no Triângulo</span>
-                <span class="stat-box-value active">${selectedContext.progressPercent}%</span>
+                <span class="stat-box-label">XP Histórico Total</span>
+                <span class="stat-box-value">${selectedContext.historicalXP} XP</span>
               </div>
               ${hasAlterEgo ? `
                 <div class="context-stat-box">
@@ -260,18 +250,11 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
                 </div>
               ` : `
                 <div class="context-stat-box">
-                  <span class="stat-box-label">Próximo Nível</span>
-                  <span class="stat-box-value">${selectedContext.levelInfo.currentLevelXp} / ${selectedContext.levelInfo.xpForNextLevel} XP</span>
+                  <span class="stat-box-label">Restante para Nível ${currentLevel + 1}</span>
+                  <span class="stat-box-value">${Math.max(0, requiredXP - selectedContext.cycleXP)} XP</span>
                 </div>
               `}
             </div>
-
-            <!-- Traits from Alter Ego if configured -->
-            ${selectedContext.traits.length > 0 ? `
-              <div class="context-traits-row">
-                ${selectedContext.traits.map(t => `<span class="context-trait-chip">${t}</span>`).join('')}
-              </div>
-            ` : ''}
 
             <!-- Goals List -->
             <div class="context-goals-section">
@@ -283,7 +266,7 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
               </div>
 
               ${selectedContext.goals.length === 0 ? `
-                <p class="context-no-goals">Nenhuma meta associada a este pilar. Metas concluídas geram +100 XP!</p>
+                <p class="context-no-goals">Nenhuma meta ativa. Concluir uma meta rende +100 XP para este pilar!</p>
               ` : `
                 <div class="context-goals-list">
                   ${selectedContext.goals.map(g => `
@@ -310,22 +293,36 @@ export function renderEvolutionTriangleHtml(state: AppState): string {
             </div>
           </div>
         ` : `
-          <p class="triangle-context-hint">Toque em Mente, Corpo ou Alma para inspecionar nível, XP e metas</p>
+          <p class="triangle-context-hint">Toque em Mente, Corpo ou Alma para ver detalhes do ciclo e metas</p>
         `}
       </div>
     </section>
   `;
 }
 
-function getContextData(pillarId: PillarId, state: AppState, scaleMax: number) {
+function getContextData(pillarId: PillarId, state: AppState, requiredXP: number) {
   const alterEgo = state.alterEgo;
   const pillarInfo = alterEgo ? alterEgo[pillarId] : { target: 80, traits: [] };
-  const xp = state.pillarXp?.[pillarId] || 0;
-  const levelInfo = getPillarLevelInfo(xp);
-  const progressPercent = getPillarProgressPercent(xp, scaleMax);
+
+  const progress = state.progress;
+  let cycleXP = 0;
+  let historicalXP = 0;
+
+  if (pillarId === 'mente') {
+    cycleXP = progress.currentCycleMenteXP || 0;
+    historicalXP = progress.menteXP || 0;
+  } else if (pillarId === 'corpo') {
+    cycleXP = progress.currentCycleCorpoXP || 0;
+    historicalXP = progress.corpoXP || 0;
+  } else if (pillarId === 'alma') {
+    cycleXP = progress.currentCycleAlmaXP || 0;
+    historicalXP = progress.almaXP || 0;
+  }
+
+  const percent = Math.min(100, Math.round((cycleXP / requiredXP) * 100));
   const goals = getPillarGoals(state, pillarId);
   const target = pillarInfo.target;
-  const distance = Math.max(0, target - progressPercent);
+  const distance = Math.max(0, target - percent);
 
   const titles: Record<PillarId, string> = {
     mente: 'MENTE',
@@ -336,9 +333,9 @@ function getContextData(pillarId: PillarId, state: AppState, scaleMax: number) {
   return {
     pillarId,
     title: titles[pillarId],
-    xp,
-    levelInfo,
-    progressPercent,
+    cycleXP,
+    historicalXP,
+    percent,
     target,
     distance,
     traits: pillarInfo.traits || [],

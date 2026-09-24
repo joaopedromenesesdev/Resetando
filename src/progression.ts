@@ -1,184 +1,259 @@
 // ========================================
 // Resetando — Progression & Gamification System
-// XP, Levels, and Triangle Normalization
+// Strict cycle-based progression:
+// HÁBITOS → XP → PILARES → TRIÂNGULO → NÍVEL
 // ========================================
 
-import type { PillarId } from './models';
+import type { AppState, PillarId, UserProgress, XPEvent } from './models';
+import { saveState } from './storage';
 
-export interface LevelInfo {
-  level: number;
-  currentLevelXp: number; // XP accumulated within current level
-  xpForNextLevel: number; // XP needed to advance to next level from current level
-  progressPercent: number; // 0 - 100% within current level
-  totalXp: number;
+// BASE_XP_PER_PILLAR represents 1 full week of XP for a pillar.
+// Easily configurable in this single location.
+export const BASE_XP_PER_PILLAR = 630;
+
+/**
+ * Calculates required XP per pillar for a given level.
+ * Formula: requiredXP = BASE_XP_PER_PILLAR * 2^(level - 1)
+ * Level 1 → 2: 630
+ * Level 2 → 3: 1260
+ * Level 3 → 4: 2520
+ * Level 4 → 5: 5040
+ * Level 5 → 6: 10080
+ */
+export function calculateRequiredXP(level: number): number {
+  const safeLevel = Math.max(1, Math.floor(level));
+  return BASE_XP_PER_PILLAR * Math.pow(2, safeLevel - 1);
 }
 
-export interface ScaleTier {
-  tierMax: number;
-  tierName: string;
-  tierIndex: number;
+/**
+ * Calculates current progress ratio (0 to 1) for a pillar in the current cycle.
+ */
+export function calculatePillarProgress(cycleXP: number, requiredXP: number): number {
+  if (requiredXP <= 0) return 0;
+  return Math.min(Math.max(0, cycleXP) / requiredXP, 1);
 }
 
-// ---- Pillar Levels ----
-// Calibrated to user specifications:
-// 350 XP -> Level 4
-// 420 XP -> Level 5
-// 470 XP -> Level 6
-const PILLAR_THRESHOLDS = [
-  0,    // Lvl 1
-  80,   // Lvl 2
-  180,  // Lvl 3
-  300,  // Lvl 4
-  410,  // Lvl 5
-  465,  // Lvl 6
-  580,  // Lvl 7
-  710,  // Lvl 8
-  850,  // Lvl 9
-  1000, // Lvl 10
-];
+export function getDefaultUserProgress(): UserProgress {
+  return {
+    totalXP: 0,
+    menteXP: 0,
+    corpoXP: 0,
+    almaXP: 0,
+    currentLevel: 1,
+    currentCycleMenteXP: 0,
+    currentCycleCorpoXP: 0,
+    currentCycleAlmaXP: 0,
+  };
+}
 
-export function getPillarLevelInfo(xp: number): LevelInfo {
-  const safeXp = Math.max(0, Math.round(xp || 0));
+export interface LevelUpResult {
+  newProgress: UserProgress;
+  leveledUp: boolean;
+  oldLevel: number;
+  newLevel: number;
+  levelsGained: number;
+}
 
-  let level = 1;
-  let prevThreshold = 0;
-  let nextThreshold = PILLAR_THRESHOLDS[1];
+/**
+ * Checks if all three pillars have reached the required XP for the current level.
+ * If yes, advances levels, carrying over all excess XP to the next cycle.
+ * Handles multi-level progression seamlessly.
+ */
+export function checkAndProcessLevelUp(progress: UserProgress): LevelUpResult {
+  let currentLevel = Math.max(1, progress.currentLevel);
+  let cycleM = Math.max(0, progress.currentCycleMenteXP);
+  let cycleC = Math.max(0, progress.currentCycleCorpoXP);
+  let cycleA = Math.max(0, progress.currentCycleAlmaXP);
+  const oldLevel = currentLevel;
+  let levelsGained = 0;
 
-  for (let i = 0; i < PILLAR_THRESHOLDS.length; i++) {
-    if (safeXp >= PILLAR_THRESHOLDS[i]) {
-      level = i + 1;
-      prevThreshold = PILLAR_THRESHOLDS[i];
-      nextThreshold = i + 1 < PILLAR_THRESHOLDS.length
-        ? PILLAR_THRESHOLDS[i + 1]
-        : prevThreshold + 150;
+  while (true) {
+    const required = calculateRequiredXP(currentLevel);
+    // ALL 3 pillars must reach the requirement to level up
+    if (cycleM >= required && cycleC >= required && cycleA >= required) {
+      cycleM -= required;
+      cycleC -= required;
+      cycleA -= required;
+      currentLevel += 1;
+      levelsGained += 1;
     } else {
       break;
     }
   }
 
-  // Handle beyond max predefined threshold
-  if (safeXp >= PILLAR_THRESHOLDS[PILLAR_THRESHOLDS.length - 1]) {
-    const excess = safeXp - PILLAR_THRESHOLDS[PILLAR_THRESHOLDS.length - 1];
-    const extraLevels = Math.floor(excess / 150);
-    level = PILLAR_THRESHOLDS.length + extraLevels;
-    prevThreshold = PILLAR_THRESHOLDS[PILLAR_THRESHOLDS.length - 1] + extraLevels * 150;
-    nextThreshold = prevThreshold + 150;
-  }
-
-  const range = nextThreshold - prevThreshold;
-  const currentLevelXp = safeXp - prevThreshold;
-  const progressPercent = Math.min(100, Math.max(0, Math.round((currentLevelXp / range) * 100)));
+  const leveledUp = levelsGained > 0;
+  const newProgress: UserProgress = {
+    ...progress,
+    currentLevel,
+    currentCycleMenteXP: cycleM,
+    currentCycleCorpoXP: cycleC,
+    currentCycleAlmaXP: cycleA,
+  };
 
   return {
-    level,
-    currentLevelXp,
-    xpForNextLevel: range,
-    progressPercent,
-    totalXp: safeXp,
+    newProgress,
+    leveledUp,
+    oldLevel,
+    newLevel: currentLevel,
+    levelsGained,
   };
 }
 
-// ---- Global Level ----
-// Calibrated to user specification:
-// 1240 XP -> Level 8
-const GLOBAL_THRESHOLDS = [
-  0,    // Lvl 1
-  100,  // Lvl 2
-  230,  // Lvl 3
-  380,  // Lvl 4
-  550,  // Lvl 5
-  740,  // Lvl 6
-  950,  // Lvl 7
-  1180, // Lvl 8
-  1430, // Lvl 9
-  1700, // Lvl 10
-  2000, // Lvl 11
-];
+export interface AddXpResult {
+  newState: AppState;
+  eventAdded: boolean;
+  leveledUp: boolean;
+  oldLevel: number;
+  newLevel: number;
+}
 
-export function getGlobalLevelInfo(totalXp: number): LevelInfo {
-  const safeXp = Math.max(0, Math.round(totalXp || 0));
+/**
+ * Central function to award XP.
+ * Enforces strict idempotency via unique referenceId.
+ * Updates historical total XP and current cycle XP.
+ * Checks and processes level-up transitions.
+ */
+export function addXP(
+  state: AppState,
+  pillar: PillarId,
+  amount: number,
+  source: string,
+  referenceId: string
+): AddXpResult {
+  const currentEvents = state.xpEvents || [];
+  const currentProg = state.progress || getDefaultUserProgress();
+  const oldLevel = currentProg.currentLevel;
 
-  let level = 1;
-  let prevThreshold = 0;
-  let nextThreshold = GLOBAL_THRESHOLDS[1];
-
-  for (let i = 0; i < GLOBAL_THRESHOLDS.length; i++) {
-    if (safeXp >= GLOBAL_THRESHOLDS[i]) {
-      level = i + 1;
-      prevThreshold = GLOBAL_THRESHOLDS[i];
-      nextThreshold = i + 1 < GLOBAL_THRESHOLDS.length
-        ? GLOBAL_THRESHOLDS[i + 1]
-        : prevThreshold + 300;
-    } else {
-      break;
-    }
+  // Idempotency check: if referenceId already rewarded, do not award again
+  if (currentEvents.some(e => e.referenceId === referenceId)) {
+    return {
+      newState: state,
+      eventAdded: false,
+      leveledUp: false,
+      oldLevel,
+      newLevel: oldLevel,
+    };
   }
 
-  if (safeXp >= GLOBAL_THRESHOLDS[GLOBAL_THRESHOLDS.length - 1]) {
-    const excess = safeXp - GLOBAL_THRESHOLDS[GLOBAL_THRESHOLDS.length - 1];
-    const extraLevels = Math.floor(excess / 300);
-    level = GLOBAL_THRESHOLDS.length + extraLevels;
-    prevThreshold = GLOBAL_THRESHOLDS[GLOBAL_THRESHOLDS.length - 1] + extraLevels * 300;
-    nextThreshold = prevThreshold + 300;
+  const safeAmount = Math.max(0, Math.round(amount));
+  if (safeAmount === 0) {
+    return {
+      newState: state,
+      eventAdded: false,
+      leveledUp: false,
+      oldLevel,
+      newLevel: oldLevel,
+    };
   }
 
-  const range = nextThreshold - prevThreshold;
-  const currentLevelXp = safeXp - prevThreshold;
-  const progressPercent = Math.min(100, Math.max(0, Math.round((currentLevelXp / range) * 100)));
+  // Create XP event record
+  const newEvent: XPEvent = {
+    id: Date.now().toString(36) + Math.random().toString(36).substring(2, 7),
+    pillar,
+    amount: safeAmount,
+    source,
+    referenceId,
+    createdAt: new Date().toISOString(),
+  };
+
+  // Update progress
+  const updatedProgress: UserProgress = {
+    ...currentProg,
+    totalXP: (currentProg.totalXP || 0) + safeAmount,
+    menteXP: pillar === 'mente' ? (currentProg.menteXP || 0) + safeAmount : (currentProg.menteXP || 0),
+    corpoXP: pillar === 'corpo' ? (currentProg.corpoXP || 0) + safeAmount : (currentProg.corpoXP || 0),
+    almaXP: pillar === 'alma' ? (currentProg.almaXP || 0) + safeAmount : (currentProg.almaXP || 0),
+    currentCycleMenteXP: pillar === 'mente' ? (currentProg.currentCycleMenteXP || 0) + safeAmount : (currentProg.currentCycleMenteXP || 0),
+    currentCycleCorpoXP: pillar === 'corpo' ? (currentProg.currentCycleCorpoXP || 0) + safeAmount : (currentProg.currentCycleCorpoXP || 0),
+    currentCycleAlmaXP: pillar === 'alma' ? (currentProg.currentCycleAlmaXP || 0) + safeAmount : (currentProg.currentCycleAlmaXP || 0),
+  };
+
+  // Check level up with excess carry-over
+  const levelResult = checkAndProcessLevelUp(updatedProgress);
+
+  const newState: AppState = {
+    ...state,
+    progress: levelResult.newProgress,
+    xpEvents: [...currentEvents, newEvent],
+    // Maintain legacy sync fields
+    totalXp: levelResult.newProgress.totalXP,
+    pillarXp: {
+      mente: levelResult.newProgress.menteXP,
+      corpo: levelResult.newProgress.corpoXP,
+      alma: levelResult.newProgress.almaXP,
+    },
+  };
+
+  saveState(newState);
+
+  // Show visual feedback toast
+  showXpToast(safeAmount, pillar, source);
+
+  // If leveled up, trigger level up announcement modal
+  if (levelResult.leveledUp) {
+    const nextReq = calculateRequiredXP(levelResult.newLevel);
+    showLevelUpModal(levelResult.newLevel, nextReq);
+  }
 
   return {
-    level,
-    currentLevelXp,
-    xpForNextLevel: range,
-    progressPercent,
-    totalXp: safeXp,
+    newState,
+    eventAdded: true,
+    leveledUp: levelResult.leveledUp,
+    oldLevel,
+    newLevel: levelResult.newLevel,
   };
 }
 
-// ---- Evolution Scale / Triangle Normalization ----
-// Smooth tier curve without artificial permanent ceilings:
-// Tier 1: 500 XP (400 XP -> 80% as in user example)
-// Expands progressively as XP increases
-const SCALE_TIERS: ScaleTier[] = [
-  { tierMax: 500, tierName: 'Fundação', tierIndex: 1 },
-  { tierMax: 1000, tierName: 'Desenvolvimento', tierIndex: 2 },
-  { tierMax: 2000, tierName: 'Consolidação', tierIndex: 3 },
-  { tierMax: 4000, tierName: 'Avançado', tierIndex: 4 },
-  { tierMax: 7500, tierName: 'Maestria', tierIndex: 5 },
-  { tierMax: 12000, tierName: 'Transcendência', tierIndex: 6 },
-];
+export function getCurrentLevelProgress(progress: UserProgress): {
+  currentLevel: number;
+  requiredXP: number;
+  mente: { cycleXP: number; requiredXP: number; percent: number; progressRatio: number };
+  corpo: { cycleXP: number; requiredXP: number; percent: number; progressRatio: number };
+  alma: { cycleXP: number; requiredXP: number; percent: number; progressRatio: number };
+  totalXP: number;
+  allPillarsCompleted: boolean;
+} {
+  const currentLevel = Math.max(1, progress.currentLevel);
+  const requiredXP = calculateRequiredXP(currentLevel);
 
-export function getEvolutionScale(highestPillarXp: number): ScaleTier {
-  const safeXp = Math.max(0, Math.round(highestPillarXp || 0));
+  const ratioM = calculatePillarProgress(progress.currentCycleMenteXP, requiredXP);
+  const ratioC = calculatePillarProgress(progress.currentCycleCorpoXP, requiredXP);
+  const ratioA = calculatePillarProgress(progress.currentCycleAlmaXP, requiredXP);
 
-  for (let i = 0; i < SCALE_TIERS.length; i++) {
-    // Transition to next scale once any pillar reaches 95% of current tier
-    if (safeXp < SCALE_TIERS[i].tierMax * 0.95) {
-      return SCALE_TIERS[i];
-    }
-  }
-
-  const lastTier = SCALE_TIERS[SCALE_TIERS.length - 1].tierMax;
-  const step = 5000;
-  const extraSteps = Math.ceil((safeXp - lastTier * 0.95) / step);
-  const tierMax = lastTier + extraSteps * step;
+  const percentM = Math.min(100, Math.round(ratioM * 100));
+  const percentC = Math.min(100, Math.round(ratioC * 100));
+  const percentA = Math.min(100, Math.round(ratioA * 100));
 
   return {
-    tierMax,
-    tierName: `Nível Superior ${extraSteps}`,
-    tierIndex: SCALE_TIERS.length + extraSteps,
+    currentLevel,
+    requiredXP,
+    mente: {
+      cycleXP: Math.min(requiredXP, progress.currentCycleMenteXP),
+      requiredXP,
+      percent: percentM,
+      progressRatio: ratioM,
+    },
+    corpo: {
+      cycleXP: Math.min(requiredXP, progress.currentCycleCorpoXP),
+      requiredXP,
+      percent: percentC,
+      progressRatio: ratioC,
+    },
+    alma: {
+      cycleXP: Math.min(requiredXP, progress.currentCycleAlmaXP),
+      requiredXP,
+      percent: percentA,
+      progressRatio: ratioA,
+    },
+    totalXP: progress.totalXP || 0,
+    allPillarsCompleted: percentM >= 100 && percentC >= 100 && percentA >= 100,
   };
-}
-
-export function getPillarProgressPercent(pillarXp: number, scaleMax: number): number {
-  if (scaleMax <= 0) return 0;
-  const safeXp = Math.max(0, pillarXp || 0);
-  const pct = Math.round((safeXp / scaleMax) * 100);
-  return Math.min(100, Math.max(0, pct));
 }
 
 // ---- Visual Feedback: Floating XP Toast ----
-export function showXpToast(amount: number, pillarId: PillarId, isLevelUp = false): void {
+export function showXpToast(amount: number, pillarId: PillarId, source?: string): void {
+  if (typeof document === 'undefined' || !document.body) return;
+
   // Remove existing toast if present
   const oldToast = document.querySelector('.xp-feedback-toast');
   if (oldToast) {
@@ -191,20 +266,68 @@ export function showXpToast(amount: number, pillarId: PillarId, isLevelUp = fals
     alma: 'ALMA',
   };
 
+  const isBonus = source && source.includes('bonus');
+
   const toast = document.createElement('div');
   toast.className = 'xp-feedback-toast';
   toast.innerHTML = `
     <span class="xp-feedback-amount">+${amount} XP</span>
     <span class="xp-feedback-divider">·</span>
     <span class="xp-feedback-pillar">${names[pillarId]}</span>
-    ${isLevelUp ? `<span class="xp-feedback-levelup">SUBIU DE NÍVEL!</span>` : ''}
+    ${isBonus ? `<span class="xp-feedback-bonus-tag">BÔNUS</span>` : ''}
   `;
 
   document.body.appendChild(toast);
 
-  // Auto remove after animation completes
   setTimeout(() => {
-    toast.classList.add('fade-out');
-    setTimeout(() => toast.remove(), 400);
+    toast?.classList?.add('fade-out');
+    setTimeout(() => toast?.remove(), 400);
   }, 1800);
 }
+
+// ---- Visual Feedback: Level Up Modal ----
+export function showLevelUpModal(newLevel: number, requiredXP: number): void {
+  document.getElementById('level-up-modal-backdrop')?.remove();
+
+  const modalHtml = `
+    <div class="modal-backdrop level-up-backdrop" id="level-up-modal-backdrop">
+      <div class="modal-card level-up-card">
+        <div class="level-up-glow"></div>
+        <div class="level-up-badge">NOVO NÍVEL ALCANÇADO</div>
+        <div class="level-up-title-wrap">
+          <span class="level-up-number">NÍVEL ${newLevel}</span>
+        </div>
+        <p class="level-up-congrats">
+          Você completou o ciclo de evolução nos três pilares.
+        </p>
+        <div class="level-up-info-box">
+          <span class="level-up-info-label">Novo Requisito do Ciclo</span>
+          <span class="level-up-info-value">${requiredXP.toLocaleString('pt-BR')} XP por pilar</span>
+        </div>
+        <p class="level-up-footnote">
+          Seu histórico de XP continua totalmente preservado. O triângulo foi reiniciado para este novo patamar.
+        </p>
+        <button class="btn btn-primary" id="btn-close-level-up">
+          Continuar Evoluindo
+        </button>
+      </div>
+    </div>
+  `;
+
+  if (typeof document === 'undefined' || !document.body) return;
+
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = modalHtml;
+  if (wrapper.firstElementChild) {
+    document.body.appendChild(wrapper.firstElementChild);
+  }
+
+  const backdrop = document.getElementById('level-up-modal-backdrop');
+  const close = () => backdrop?.remove();
+
+  document.getElementById('btn-close-level-up')?.addEventListener('click', close);
+  backdrop?.addEventListener('click', (e) => {
+    if (e.target === backdrop) close();
+  });
+}
+

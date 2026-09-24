@@ -16,8 +16,7 @@ import {
   getStreak,
 } from './storage';
 import {
-  getGlobalLevelInfo,
-  getPillarLevelInfo,
+  getCurrentLevelProgress,
 } from './progression';
 import { icon, pillarIcon } from './icons';
 
@@ -36,16 +35,15 @@ export function renderToday(container: HTMLElement, state: AppState, callbacks: 
   const progress = getDayProgress(state, today);
   const streak = getStreak(state);
 
-  const totalXp = state.totalXp || 0;
-  const globalLevel = getGlobalLevelInfo(totalXp);
+  const userProgress = state.progress;
+  const levelData = getCurrentLevelProgress(userProgress);
+  const currentLevel = levelData.currentLevel;
+  const requiredXP = levelData.requiredXP;
+  const totalXP = userProgress.totalXP || 0;
 
-  const menteXp = state.pillarXp?.mente || 0;
-  const corpoXp = state.pillarXp?.corpo || 0;
-  const almaXp = state.pillarXp?.alma || 0;
-
-  const menteLevel = getPillarLevelInfo(menteXp);
-  const corpoLevel = getPillarLevelInfo(corpoXp);
-  const almaLevel = getPillarLevelInfo(almaXp);
+  const avgCyclePercent = Math.round(
+    (levelData.mente.percent + levelData.corpo.percent + levelData.alma.percent) / 3
+  );
 
   container.innerHTML = `
     <div class="page">
@@ -61,26 +59,26 @@ export function renderToday(container: HTMLElement, state: AppState, callbacks: 
         </div>
       ` : ''}
 
-      <!-- Progression Summary Card (Section 17) -->
+      <!-- Progression Summary Card (Section 13 & 17) -->
       <section class="today-progression-card" id="today-progression-card">
         <div class="today-progression-top">
           <div class="today-level-badge">
-            <span class="level-badge-label">PROGRESSÃO GLOBAL</span>
-            <span class="level-badge-value">NÍVEL ${globalLevel.level}</span>
+            <span class="level-badge-label">PROGRESSÃO ATUAL</span>
+            <span class="level-badge-value">NÍVEL ${currentLevel}</span>
           </div>
           <div class="today-xp-total">
-            <span class="xp-value">${totalXp.toLocaleString('pt-BR')}</span>
-            <span class="xp-unit">XP</span>
+            <span class="xp-value">${totalXP.toLocaleString('pt-BR')}</span>
+            <span class="xp-unit">XP TOTAL</span>
           </div>
         </div>
 
         <div class="today-xp-bar-wrap">
           <div class="today-xp-bar">
-            <div class="today-xp-fill" style="width: ${globalLevel.progressPercent}%"></div>
+            <div class="today-xp-fill" style="width: ${avgCyclePercent}%"></div>
           </div>
           <div class="today-xp-sub-row">
-            <span class="today-xp-sub">${globalLevel.currentLevelXp} / ${globalLevel.xpForNextLevel} XP para Nível ${globalLevel.level + 1}</span>
-            <span class="today-xp-pct">${globalLevel.progressPercent}%</span>
+            <span class="today-xp-sub">Ciclo do Nível ${currentLevel} · ${requiredXP.toLocaleString('pt-BR')} XP por pilar</span>
+            <span class="today-xp-pct">${avgCyclePercent}%</span>
           </div>
         </div>
 
@@ -88,15 +86,15 @@ export function renderToday(container: HTMLElement, state: AppState, callbacks: 
         <div class="today-pillars-pills">
           <div class="today-pillar-pill" data-nav-pillar="mente">
             <span class="pill-name">Mente</span>
-            <span class="pill-stat">Nvl ${menteLevel.level} · ${menteXp} XP</span>
+            <span class="pill-stat">${userProgress.currentCycleMenteXP}/${requiredXP} XP (${levelData.mente.percent}%)</span>
           </div>
           <div class="today-pillar-pill" data-nav-pillar="corpo">
             <span class="pill-name">Corpo</span>
-            <span class="pill-stat">Nvl ${corpoLevel.level} · ${corpoXp} XP</span>
+            <span class="pill-stat">${userProgress.currentCycleCorpoXP}/${requiredXP} XP (${levelData.corpo.percent}%)</span>
           </div>
           <div class="today-pillar-pill" data-nav-pillar="alma">
             <span class="pill-name">Alma</span>
-            <span class="pill-stat">Nvl ${almaLevel.level} · ${almaXp} XP</span>
+            <span class="pill-stat">${userProgress.currentCycleAlmaXP}/${requiredXP} XP (${levelData.alma.percent}%)</span>
           </div>
         </div>
 
@@ -173,7 +171,7 @@ export function renderToday(container: HTMLElement, state: AppState, callbacks: 
         <div class="perfect-day">
           <div class="perfect-day-icon">${icon('sparkles', 40)}</div>
           <p class="perfect-day-title">Dia perfeito!</p>
-          <p class="perfect-day-sub">Todos os ${progress.total} hábitos concluídos. Sua evolução agradece!</p>
+          <p class="perfect-day-sub">Todos os hábitos concluídos. Bônus de XP concedido!</p>
         </div>
       ` : ''}
     </div>
