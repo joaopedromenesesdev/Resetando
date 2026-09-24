@@ -15,9 +15,9 @@ import { icon } from './icons';
 
 let selectedPillar: PillarId | null = null;
 
-const VIEW_WIDTH = 350;
-const VIEW_HEIGHT = 310;
-const CX = 175;
+const VIEW_WIDTH = 400;
+const VIEW_HEIGHT = 315;
+const CX = 200;
 const CY = 182;
 const RADIUS = 148;
 
