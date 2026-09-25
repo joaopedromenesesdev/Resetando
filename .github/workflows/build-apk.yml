@@ -39,7 +39,9 @@ jobs:
         run: npm run build
 
       - name: Copy Assets to Android
-        run: npx @capacitor/cli copy android
+        run: |
+          mkdir -p android/app/src/main/assets/public
+          npx @capacitor/cli copy android
 
       - name: Build Debug APK
         run: |
