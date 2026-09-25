@@ -8,8 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "npx tsx test_progression.ts",
-    "cap:sync": "npm run build && cap sync android",
-    "cap:open": "cap open android"
+    "cap:sync": "npm run build && npx @capacitor/cli sync android",
+    "cap:open": "npx @capacitor/cli open android"
   },
   "devDependencies": {
     "typescript": "~6.0.2",

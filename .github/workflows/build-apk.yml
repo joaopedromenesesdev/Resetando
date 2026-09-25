@@ -36,8 +36,11 @@ jobs:
       - name: Make Gradlew Executable
         run: chmod +x android/gradlew
 
-      - name: Build Web Assets and Sync Android
-        run: npm run cap:sync
+      - name: Build Web Assets
+        run: npm run build
+
+      - name: Sync Capacitor Android
+        run: npx @capacitor/cli sync android --verbose
 
       - name: Build Debug APK
         run: |
