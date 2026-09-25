@@ -41,7 +41,11 @@ jobs:
       - name: Copy Assets to Android
         run: |
           mkdir -p android/app/src/main/assets/public
-          npx @capacitor/cli copy android
+          cp -r dist/* android/app/src/main/assets/public/
+          cp capacitor.config.json android/app/src/main/assets/capacitor.config.json
+          echo "[]" > android/app/src/main/assets/capacitor.plugins.json
+          touch android/app/src/main/assets/public/cordova.js
+          touch android/app/src/main/assets/public/cordova_plugins.js
 
       - name: Build Debug APK
         run: |
