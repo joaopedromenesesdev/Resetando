@@ -73,13 +73,21 @@ jobs:
           name: gradle-build-log
           path: gradle_build.log
 
-      - name: Locate APK
+      - name: Copy and Prepare APK
         run: |
-          find android/app/build/outputs -name "*.apk" || true
+          APK_PATH=$(find android/app/build/outputs -name "*.apk" | head -n 1)
+          echo "Found APK at: $APK_PATH"
+          cp "$APK_PATH" ./Resetando.apk
+          ls -lh ./Resetando.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Resetando-APK
-          path: android/app/build/outputs/**/*.apk
-          if-no-files-found: error
+          path: ./Resetando.apk
+
+      - name: Publish APK to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create v1.0.0 ./Resetando.apk --title "Resetando App (Android APK)" --notes "Baixe o arquivo Resetando.apk e instale diretamente no seu celular Android." --clobber || true
