@@ -61,7 +61,7 @@ jobs:
         run: |
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
           cd android
-          if ! ./gradlew assembleDebug -PcompileSdkVersion=35 -PtargetSdkVersion=35 --no-daemon --stacktrace 2>&1 | tee ../gradle_build.log; then
+          if ! ./gradlew :app:assembleDebug -PcompileSdkVersion=35 -PtargetSdkVersion=35 --no-daemon --stacktrace 2>&1 | tee ../gradle_build.log; then
             gh issue create --title "Gradle Build Failure" --body-file ../gradle_build.log || true
             exit 1
           fi
@@ -75,10 +75,18 @@ jobs:
 
       - name: Copy and Prepare APK
         run: |
-          APK_PATH=$(find android/app/build/outputs -name "*.apk" | head -n 1)
-          echo "Found APK at: $APK_PATH"
-          cp "$APK_PATH" ./Resetando.apk
-          ls -lh ./Resetando.apk
+          echo "=== SEARCHING FOR APK ==="
+          find . -name "*.apk"
+          APK_PATH=$(find . -name "*.apk" | head -n 1)
+          if [ -n "$APK_PATH" ]; then
+            echo "Found APK at: $APK_PATH"
+            cp "$APK_PATH" ./Resetando.apk
+            ls -lh ./Resetando.apk
+          else
+            echo "No APK found. Showing last 50 lines of build log:"
+            tail -n 50 gradle_build.log
+            exit 1
+          fi
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
