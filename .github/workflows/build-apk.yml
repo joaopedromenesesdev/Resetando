@@ -59,10 +59,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -o pipefail
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
           cd android
           if ! ./gradlew :app:assembleDebug -PcompileSdkVersion=35 -PtargetSdkVersion=35 --no-daemon --stacktrace 2>&1 | tee ../gradle_build.log; then
-            gh issue create --title "Gradle Build Failure" --body-file ../gradle_build.log || true
+            gh issue create --title "Gradle Build Failure" --body "$(tail -n 60 ../gradle_build.log)" || true
             exit 1
           fi
 
