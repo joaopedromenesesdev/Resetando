@@ -59,7 +59,7 @@ jobs:
           set -o pipefail
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
           cd android
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle_build.log
+          ./gradlew assembleDebug -PcompileSdkVersion=35 -PtargetSdkVersion=35 --no-daemon --stacktrace 2>&1 | tee ../gradle_build.log
 
       - name: Upload Build Log
         if: always()
