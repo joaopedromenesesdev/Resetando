@@ -47,18 +47,25 @@ jobs:
           touch android/app/src/main/assets/public/cordova.js
           touch android/app/src/main/assets/public/cordova_plugins.js
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Accept Android Licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
       - name: Build Debug APK
         run: |
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
           cd android
-          ./gradlew assembleDebug --no-daemon --stacktrace > gradle_output.log 2>&1 || {
-            echo "### Gradle Build Error Log" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            tail -n 100 gradle_output.log >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            cat gradle_output.log
-            exit 1
-          }
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle_build.log
+
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: gradle_build.log
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
