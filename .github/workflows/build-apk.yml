@@ -103,4 +103,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create v1.0.0 ./Resetando.apk --title "Resetando App (Android APK)" --notes "Baixe o arquivo Resetando.apk e instale diretamente no seu celular Android." --clobber || true
+          gh release create v1.0.0 ./Resetando.apk --title "Resetando App (Android APK)" --notes "Baixe o arquivo Resetando.apk e instale diretamente no seu celular Android." --clobber --target main || true
