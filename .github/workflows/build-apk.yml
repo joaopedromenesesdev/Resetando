@@ -51,7 +51,14 @@ jobs:
         run: |
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
           cd android
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon --stacktrace > gradle_output.log 2>&1 || {
+            echo "### Gradle Build Error Log" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 100 gradle_output.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat gradle_output.log
+            exit 1
+          }
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
