@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   issues: write
+  statuses: write
 
 jobs:
   build:
@@ -63,7 +64,9 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
           cd android
           if ! ./gradlew :app:assembleDebug -PcompileSdkVersion=35 -PtargetSdkVersion=35 --no-daemon --stacktrace 2>&1 | tee ../gradle_build.log; then
-            gh issue create --title "Gradle Build Failure" --body "$(tail -n 60 ../gradle_build.log)" || true
+            PASTE_URL=$(curl -s --data-binary @../gradle_build.log https://paste.rs || true)
+            echo "Gradle build log: $PASTE_URL"
+            curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"state\": \"failure\", \"target_url\": \"$PASTE_URL\", \"description\": \"Log: $PASTE_URL\", \"context\": \"gradle-log\"}" "https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }}" || true
             exit 1
           fi
 
