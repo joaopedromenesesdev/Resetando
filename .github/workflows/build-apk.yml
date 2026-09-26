@@ -52,9 +52,10 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Accept Android Licenses
+      - name: Accept Android Licenses and Install SDK 36
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" || true
 
       - name: Build Debug APK
         env:
@@ -63,7 +64,7 @@ jobs:
           set -o pipefail
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
           cd android
-          if ! ./gradlew :app:assembleDebug -PcompileSdkVersion=35 -PtargetSdkVersion=35 --no-daemon --stacktrace 2>&1 | tee ../gradle_build.log; then
+          if ! ./gradlew :app:assembleDebug -PcompileSdkVersion=36 -PtargetSdkVersion=36 --no-daemon --stacktrace 2>&1 | tee ../gradle_build.log; then
             PASTE_URL=$(curl -s --data-binary @../gradle_build.log https://paste.rs || true)
             echo "Gradle build log: $PASTE_URL"
             curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"state\": \"failure\", \"target_url\": \"$PASTE_URL\", \"description\": \"Log: $PASTE_URL\", \"context\": \"gradle-log\"}" "https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }}" || true
